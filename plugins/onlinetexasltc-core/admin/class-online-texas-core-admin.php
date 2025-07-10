@@ -411,6 +411,12 @@ class Online_Texas_Core_Admin {
 		$options = get_option( 'otc_options', array() );
 
 		foreach ( $vendors['users'] as $vendor ) {
+			// Skip admin users - they shouldn't get vendor products for their own products
+			if ( user_can( $vendor->ID, 'manage_options' ) ) {
+				$this->log_debug( "Skipping admin user {$vendor->ID} from vendor product creation" );
+				continue;
+			}
+
 			// Skip if vendor product already exists
 			$existing_product = $this->get_vendor_product( $admin_product_id, $vendor->ID );
 			if ( $existing_product ) {
@@ -455,6 +461,12 @@ class Online_Texas_Core_Admin {
 			$vendor = get_user_by( 'ID', $vendor_id );
 			if ( ! $vendor ) {
 				throw new Exception( "Invalid vendor ID: {$vendor_id}" );
+			}
+
+			// Skip admin users - they shouldn't get vendor products for their own products
+			if ( user_can( $vendor_id, 'manage_options' ) ) {
+				$this->log_debug( "Skipping vendor product creation for admin user: {$vendor_id}" );
+				return false;
 			}
 
 			// Check if vendor is active
@@ -1214,6 +1226,12 @@ class Online_Texas_Core_Admin {
 
 		if ( ! empty( $vendors['users'] ) ) {
 			foreach ( $vendors['users'] as $vendor ) {
+				// Skip admin users - they shouldn't get vendor products for their own products
+				if ( user_can( $vendor->ID, 'manage_options' ) ) {
+					$this->log_debug( "Skipping admin user {$vendor->ID} from manual vendor sync" );
+					continue;
+				}
+
 				$created = $this->sync_single_vendor( $vendor->ID );
 				if ( $created !== false ) {
 					$total_created += $created;
@@ -1234,6 +1252,12 @@ class Online_Texas_Core_Admin {
 	public function sync_single_vendor( $vendor_id ) {
 		if ( ! function_exists( 'dokan_is_user_seller' ) || ! dokan_is_user_seller( $vendor_id ) ) {
 			return false;
+		}
+
+		// Skip admin users - they shouldn't get vendor products for their own products
+		if ( user_can( $vendor_id, 'manage_options' ) ) {
+			$this->log_debug( "Skipping admin user {$vendor_id} from vendor sync" );
+			return 0; // Return 0 instead of false to indicate successful skip
 		}
 
 		// Get all admin products with courses
