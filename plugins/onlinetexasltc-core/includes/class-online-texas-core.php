@@ -164,12 +164,15 @@ class Online_Texas_Core {
 		$this->loader->add_action( 'wp_ajax_otc_manual_vendor_sync', $plugin_admin, 'ajax_manual_vendor_sync' );
 		$this->loader->add_action( 'wp_ajax_otc_clear_debug_log', $plugin_admin, 'ajax_clear_debug_log' );
 
-        // Handle product save
-		$this->loader->add_action( 'save_post', $plugin_admin, 'save_product', 100, 2);
+		// Handle admin product save (for creating vendor products)
+		$this->loader->add_action( 'save_post', $plugin_admin, 'save_product', 100, 2 );
+
+		// Handle vendor product updates (for syncing vendor product price to their group)
+		$this->loader->add_action( 'save_post', $plugin_admin, 'handle_vendor_product_update', 150, 2 );
 
 		// Add vendor product columns
 		$this->loader->add_filter( 'manage_product_posts_columns', $plugin_admin, 'add_product_columns' );
- 		$this->loader->add_action( 'manage_product_posts_custom_column', $plugin_admin, 'populate_product_columns', 10, 2);
+ 		$this->loader->add_action( 'manage_product_posts_custom_column', $plugin_admin, 'populate_product_columns', 10, 2 );
 
 		// Load vendor sync class if needed
 		if ( function_exists( 'dokan' ) ) {
