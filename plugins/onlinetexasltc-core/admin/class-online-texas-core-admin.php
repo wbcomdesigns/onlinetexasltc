@@ -49,6 +49,20 @@ class Online_Texas_Core_Admin {
 	public function __construct( $plugin_name, $version ) {
 		$this->plugin_name = $plugin_name;
 		$this->version = $version;
+		
+		// Declare HPOS compatibility
+		add_action( 'before_woocommerce_init', array( $this, 'declare_hpos_compatibility' ) );
+	}
+
+	/**
+	 * Declare compatibility with WooCommerce High-Performance Order Storage.
+	 *
+	 * @since 1.1.0
+	 */
+	public function declare_hpos_compatibility() {
+		if ( class_exists( \Automattic\WooCommerce\Utilities\FeaturesUtil::class ) ) {
+			\Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility( 'custom_order_tables', __FILE__, true );
+		}
 	}
 
 	/**
@@ -58,6 +72,11 @@ class Online_Texas_Core_Admin {
 	 * @param    string    $hook    The current admin page hook.
 	 */
 	public function enqueue_styles( $hook ) {
+		// Only load on our admin pages
+		if ( strpos( $hook, 'online-texas-core' ) === false ) {
+			return;
+		}
+
 		wp_enqueue_style( 
 			$this->plugin_name, 
 			ONLINE_TEXAS_CORE_URL . 'admin/css/online-texas-core-admin.css', 
@@ -74,6 +93,11 @@ class Online_Texas_Core_Admin {
 	 * @param    string    $hook    The current admin page hook.
 	 */
 	public function enqueue_scripts( $hook ) {
+		// Only load on our admin pages
+		if ( strpos( $hook, 'online-texas-core' ) === false ) {
+			return;
+		}
+
 		wp_enqueue_script( 
 			$this->plugin_name, 
 			ONLINE_TEXAS_CORE_URL . 'admin/js/online-texas-core-admin.js', 
@@ -96,6 +120,35 @@ class Online_Texas_Core_Admin {
 	}
 
 	/**
+	 * Check if required dependencies are available.
+	 *
+	 * @since 1.1.0
+	 * @return bool True if dependencies are met, false otherwise.
+	 */
+	private function check_dependencies() {
+		$missing = array();
+
+		if ( ! class_exists( 'WooCommerce' ) ) {
+			$missing[] = 'WooCommerce';
+		}
+
+		if ( ! function_exists( 'dokan' ) ) {
+			$missing[] = 'Dokan';
+		}
+
+		if ( ! defined( 'LEARNDASH_VERSION' ) && ! class_exists( 'SFWD_LMS' ) ) {
+			$missing[] = 'LearnDash';
+		}
+
+		if ( ! empty( $missing ) ) {
+			$this->log_debug( 'Missing dependencies: ' . implode( ', ', $missing ), 'error' );
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
 	 * Check if a post ID corresponds to a WooCommerce product.
 	 *
 	 * @since 1.0.0
@@ -103,6 +156,10 @@ class Online_Texas_Core_Admin {
 	 * @return bool True if it's a WooCommerce product, false otherwise.
 	 */
 	private function is_wc_product( $post_id ) {
+		if ( ! function_exists( 'wc_get_product' ) ) {
+			return false;
+		}
+
 		$product = wc_get_product( $post_id );
 		return $product !== false;
 	}
@@ -115,6 +172,10 @@ class Online_Texas_Core_Admin {
 	 * @return array Array of course IDs.
 	 */
 	private function fetch_course_from_product( $post_id ) {
+		if ( ! $this->check_dependencies() ) {
+			return array();
+		}
+
 		$linked_course = get_post_meta( $post_id, '_related_course', true );
 		if ( ! is_array( $linked_course ) ) {
 			$linked_course = ! empty( $linked_course ) ? array( $linked_course ) : array();
@@ -124,13 +185,15 @@ class Online_Texas_Core_Admin {
 		
 		if ( ! empty( $linked_groups ) && is_array( $linked_groups ) ) {
 			foreach ( $linked_groups as $group_id ) {
-				$group_courses = learndash_group_enrolled_courses( $group_id );
-				
-				if ( ! empty( $group_courses ) ) {
-					if ( is_array( $group_courses ) ) {
-						$linked_course = array_merge( $linked_course, $group_courses );
-					} else {
-						$linked_course[] = $group_courses;
+				if ( function_exists( 'learndash_group_enrolled_courses' ) ) {
+					$group_courses = learndash_group_enrolled_courses( $group_id );
+					
+					if ( ! empty( $group_courses ) ) {
+						if ( is_array( $group_courses ) ) {
+							$linked_course = array_merge( $linked_course, $group_courses );
+						} else {
+							$linked_course[] = $group_courses;
+						}
 					}
 				}
 			}
@@ -138,7 +201,7 @@ class Online_Texas_Core_Admin {
 			$linked_course = array_unique( array_filter( $linked_course ) );
 		}
 
-		return array_map( 'intval', $linked_course );
+		return array_map( 'intval', array_filter( $linked_course ) );
 	}
 
 	/**
@@ -149,12 +212,16 @@ class Online_Texas_Core_Admin {
 	 * @param WP_Post $post    The post object being saved.
 	 */
 	public function save_product( $post_id, $post ) {
-		// Skip if this is an autosave or revision
+		// Early exits for performance
 		if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
 			return;
 		}
 
-		if ( wp_is_post_revision( $post_id ) ) {
+		if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
+			return;
+		}
+
+		if ( ! $this->check_dependencies() ) {
 			return;
 		}
 
@@ -179,18 +246,34 @@ class Online_Texas_Core_Admin {
 			return;
 		}
 
-		$this->log_debug( "Processing product save for ID: {$post_id}" );
+		// Prevent infinite loops
+		if ( get_transient( 'otc_processing_product_' . $post_id ) ) {
+			return;
+		}
 
-		// Check if we've already processed this product
-		$already_processed = get_post_meta( $post_id, '_otc_vendor_products_created', true );
+		set_transient( 'otc_processing_product_' . $post_id, true, 30 );
 
-		if ( ! $already_processed ) {
-			// First time - create vendor products
-			$this->create_vendor_products( $post_id, $linked_courses );
-			update_post_meta( $post_id, '_otc_vendor_products_created', current_time( 'mysql' ) );
-		} else {
-			// Update existing vendor products
-			$this->sync_vendor_products( $post_id );
+		try {
+			$this->log_debug( "Processing product save for ID: {$post_id}" );
+
+			// Check if we've already processed this product
+			$already_processed = get_post_meta( $post_id, '_otc_vendor_products_created', true );
+
+			if ( ! $already_processed ) {
+				// First time - create vendor products
+				$created_count = $this->create_vendor_products( $post_id, $linked_courses );
+				if ( $created_count > 0 ) {
+					update_post_meta( $post_id, '_otc_vendor_products_created', current_time( 'mysql' ) );
+					$this->log_debug( "Created {$created_count} vendor products for admin product {$post_id}" );
+				}
+			} else {
+				// Update existing vendor products
+				$this->sync_vendor_products( $post_id );
+			}
+		} catch ( Exception $e ) {
+			$this->log_debug( "Error processing product save: " . $e->getMessage(), 'error' );
+		} finally {
+			delete_transient( 'otc_processing_product_' . $post_id );
 		}
 	}
 
@@ -231,6 +314,11 @@ class Online_Texas_Core_Admin {
 	 * @return int Number of vendor products created.
 	 */
 	public function create_vendor_products( $admin_product_id, $course_ids ) {
+		if ( ! function_exists( 'dokan_get_sellers' ) ) {
+			$this->log_debug( 'dokan_get_sellers function not available', 'error' );
+			return 0;
+		}
+
 		$vendors = dokan_get_sellers( array( 'status' => 'approved' ) );
 		
 		if ( empty( $vendors['users'] ) ) {
@@ -239,11 +327,17 @@ class Online_Texas_Core_Admin {
 		}
 
 		$created_count = 0;
+		$options = get_option( 'otc_options', array() );
 
 		foreach ( $vendors['users'] as $vendor ) {
-			// Check if vendor product already exists
+			// Skip if vendor product already exists
 			$existing_product = $this->get_vendor_product( $admin_product_id, $vendor->ID );
 			if ( $existing_product ) {
+				continue;
+			}
+
+			// Check if auto-creation is enabled for new vendors
+			if ( isset( $options['auto_create_for_new_vendors'] ) && ! $options['auto_create_for_new_vendors'] ) {
 				continue;
 			}
 
@@ -252,8 +346,6 @@ class Online_Texas_Core_Admin {
 				$created_count++;
 			}
 		}
-
-		$this->log_debug( "Created {$created_count} vendor products for admin product {$admin_product_id}" );
 
 		return $created_count;
 	}
@@ -269,6 +361,10 @@ class Online_Texas_Core_Admin {
 	 */
 	public function create_single_vendor_product( $admin_product_id, $vendor_id, $course_ids ) {
 		try {
+			if ( ! $this->check_dependencies() ) {
+				throw new Exception( 'Required dependencies not available' );
+			}
+
 			$admin_product = wc_get_product( $admin_product_id );
 			if ( ! $admin_product ) {
 				throw new Exception( "Invalid admin product ID: {$admin_product_id}" );
@@ -281,17 +377,25 @@ class Online_Texas_Core_Admin {
 			}
 
 			// Check if vendor is active
-			if ( ! dokan_is_user_seller( $vendor_id ) ) {
+			if ( ! function_exists( 'dokan_is_user_seller' ) || ! dokan_is_user_seller( $vendor_id ) ) {
 				throw new Exception( "User {$vendor_id} is not an active vendor" );
 			}
 
 			// Get vendor store info
-			$store_info = dokan_get_store_info( $vendor_id );
+			$store_info = function_exists( 'dokan_get_store_info' ) ? dokan_get_store_info( $vendor_id ) : array();
 			$store_name = ! empty( $store_info['store_name'] ) ? $store_info['store_name'] : $vendor->display_name;
+
+			// Create LearnDash group FIRST
+			$group_id = $this->create_learndash_group( $vendor_id, $course_ids, $store_name . ' - ' . $admin_product->get_name() );
+			if ( ! $group_id ) {
+				throw new Exception( 'Failed to create LearnDash group for vendor product' );
+			}
 
 			// Duplicate the product
 			$duplicated_product = $this->duplicate_product( $admin_product );
 			if ( is_wp_error( $duplicated_product ) ) {
+				// Clean up created group on failure
+				wp_delete_post( $group_id, true );
 				throw new Exception( 'Failed to duplicate product: ' . $duplicated_product->get_error_message() );
 			}
 
@@ -307,6 +411,9 @@ class Online_Texas_Core_Admin {
 			) );
 
 			if ( is_wp_error( $update_result ) ) {
+				// Clean up on failure
+				wp_delete_post( $duplicated_product->get_id(), true );
+				wp_delete_post( $group_id, true );
 				throw new Exception( 'Failed to update vendor product: ' . $update_result->get_error_message() );
 			}
 
@@ -315,14 +422,7 @@ class Online_Texas_Core_Admin {
 			$duplicated_product->set_sale_price( '' );
 			$duplicated_product->save();
 
-			// Create LearnDash group FIRST
-			$group_id = $this->create_learndash_group( $vendor_id, $course_ids, $vendor_product_title );
-
-			if ( ! $group_id ) {
-				throw new Exception( 'Failed to create LearnDash group for vendor product' );
-			}
-
-			// IMPORTANT: Remove any copied course/group associations from admin product
+			// Remove any copied course/group associations from admin product
 			delete_post_meta( $duplicated_product->get_id(), '_related_course' );
 			delete_post_meta( $duplicated_product->get_id(), '_related_group' );
 			delete_post_meta( $duplicated_product->get_id(), 'learndash_course_enrolled_courses' );
@@ -331,11 +431,11 @@ class Online_Texas_Core_Admin {
 			// Save metadata - including the group association
 			$meta_data = array(
 				'_parent_product_id'              => $admin_product_id,
-				'_linked_ld_group_id'             => $group_id,  // Single group ID
+				'_linked_ld_group_id'             => $group_id,
 				'_vendor_product_original_title'  => $admin_product->get_name(),
 				'_created_on'                     => current_time( 'mysql' ),
-				'_related_group'                  => array( $group_id ), // Array format for LearnDash
-				'learndash_group_enrolled_groups' => array( $group_id )  // Array format for LearnDash
+				'_related_group'                  => array( $group_id ),
+				'learndash_group_enrolled_groups' => array( $group_id )
 			);
 
 			foreach ( $meta_data as $key => $value ) {
@@ -347,7 +447,7 @@ class Online_Texas_Core_Admin {
 			return $duplicated_product->get_id();
 
 		} catch ( Exception $e ) {
-			$this->log_debug( "Error creating vendor product: " . $e->getMessage() );
+			$this->log_debug( "Error creating vendor product: " . $e->getMessage(), 'error' );
 			return false;
 		}
 	}
@@ -401,7 +501,15 @@ class Online_Texas_Core_Admin {
 		}
 
 		// Copy product meta (excluding specific keys)
-		$exclude_meta = array( '_edit_lock', '_edit_last', '_related_course', '_related_group' );
+		$exclude_meta = array( 
+			'_edit_lock', 
+			'_edit_last', 
+			'_related_course',
+			'_related_group',
+			'learndash_course_enrolled_courses',
+			'learndash_group_enrolled_groups'
+		);
+		
 		$meta_keys = get_post_meta( $original_product->get_id() );
 		
 		foreach ( $meta_keys as $key => $values ) {
@@ -427,6 +535,11 @@ class Online_Texas_Core_Admin {
 	 * @return int|false The created group ID or false on failure.
 	 */
 	private function create_learndash_group( $vendor_id, $course_ids, $vendor_product_title ) {
+		if ( ! function_exists( 'learndash_get_post_type_slug' ) ) {
+			$this->log_debug( 'LearnDash functions not available', 'error' );
+			return false;
+		}
+
 		// Validate course IDs
 		$valid_courses = array();
 		foreach ( $course_ids as $course_id ) {
@@ -453,20 +566,22 @@ class Online_Texas_Core_Admin {
 
 		$group_id = wp_insert_post( $group_data );
 
-		if ( is_wp_error( $group_id ) ) {
-			$this->log_debug( 'Failed to create LearnDash group: ' . $group_id->get_error_message() );
+		if ( is_wp_error( $group_id ) || ! $group_id ) {
+			$this->log_debug( 'Failed to create LearnDash group: ' . ( is_wp_error( $group_id ) ? $group_id->get_error_message() : 'Unknown error' ), 'error' );
 			return false;
 		}
 
 		// Link group to courses
-		learndash_set_group_enrolled_courses( $group_id, $valid_courses );
+		if ( function_exists( 'learndash_set_group_enrolled_courses' ) ) {
+			learndash_set_group_enrolled_courses( $group_id, $valid_courses );
+		}
 
 		// Set vendor as group leader
 		$this->set_group_leader( $group_id, $vendor_id );
 
-		$this->log_debug( "Created LearnDash group ID: {$group_id} for vendor: {$vendor_id}" );
+		$this->log_debug( "Successfully created LearnDash group ID: {$group_id} for vendor: {$vendor_id} with courses: " . implode( ',', $valid_courses ) );
 
-		return $group_id;
+		return intval( $group_id );
 	}
 
 	/**
@@ -477,7 +592,21 @@ class Online_Texas_Core_Admin {
 	 * @param int $user_id  The user ID.
 	 */
 	private function set_group_leader( $group_id, $user_id ) {
-		update_user_meta( $user_id, 'learndash_group_leaders_' . $group_id, $group_id );
+		// Method 1: LearnDash's built-in function (preferred)
+		if ( function_exists( 'learndash_set_administrators_group_id' ) ) {
+			learndash_set_administrators_group_id( $user_id, $group_id );
+		}
+
+		// Method 2: Update group post meta to include leader
+		$group_leaders = get_post_meta( $group_id, 'learndash_group_leaders', true );
+		if ( ! is_array( $group_leaders ) ) {
+			$group_leaders = array();
+		}
+		
+		if ( ! in_array( $user_id, $group_leaders ) ) {
+			$group_leaders[] = $user_id;
+			update_post_meta( $group_id, 'learndash_group_leaders', $group_leaders );
+		}
 	}
 
 	/**
@@ -500,11 +629,12 @@ class Online_Texas_Core_Admin {
 				)
 			),
 			'posts_per_page' => 1,
-			'post_status'    => 'any'
+			'post_status'    => 'any',
+			'fields'         => 'ids'
 		);
 
 		$products = get_posts( $args );
-		return ! empty( $products ) ? $products[0] : false;
+		return ! empty( $products ) ? get_post( $products[0] ) : false;
 	}
 
 	/**
@@ -514,6 +644,10 @@ class Online_Texas_Core_Admin {
 	 * @param int $admin_product_id The admin product ID that was updated.
 	 */
 	public function sync_vendor_products( $admin_product_id ) {
+		if ( ! $this->check_dependencies() ) {
+			return;
+		}
+
 		$admin_product = wc_get_product( $admin_product_id );
 		if ( ! $admin_product ) {
 			return;
@@ -530,13 +664,19 @@ class Online_Texas_Core_Admin {
 					'compare' => '='
 				)
 			),
-			'posts_per_page' => -1
+			'posts_per_page' => -1,
+			'fields'         => 'ids'
 		) );
 
 		$synced_count = 0;
 
-		foreach ( $vendor_products as $vendor_product_post ) {
-			$vendor_product = wc_get_product( $vendor_product_post->ID );
+		foreach ( $vendor_products as $vendor_product_id ) {
+			$vendor_product_post = get_post( $vendor_product_id );
+			if ( ! $vendor_product_post ) {
+				continue;
+			}
+
+			$vendor_product = wc_get_product( $vendor_product_id );
 			if ( ! $vendor_product ) {
 				continue;
 			}
@@ -546,18 +686,18 @@ class Online_Texas_Core_Admin {
 			if ( $vendor_product_post->post_status === 'publish' ) {
 				// Only update description for published products
 				wp_update_post( array(
-					'ID'           => $vendor_product_post->ID,
+					'ID'           => $vendor_product_id,
 					'post_content' => $admin_product->get_description()
 				) );
 			} else {
 				// Full sync for draft products
-				$this->sync_single_vendor_product( $vendor_product_post->ID, $admin_product );
+				$this->sync_single_vendor_product( $vendor_product_id, $admin_product );
 			}
 
 			// Update course association
 			$admin_courses = $this->fetch_course_from_product( $admin_product_id );
 			if ( ! empty( $admin_courses ) ) {
-				$this->update_vendor_course_association( $vendor_product_post->ID, $admin_courses );
+				$this->update_vendor_course_association( $vendor_product_id, $admin_courses );
 			}
 
 			$synced_count++;
@@ -604,7 +744,7 @@ class Online_Texas_Core_Admin {
 	private function update_vendor_course_association( $vendor_product_id, $new_course_ids ) {
 		$group_id = get_post_meta( $vendor_product_id, '_linked_ld_group_id', true );
 		
-		if ( $group_id ) {
+		if ( $group_id && function_exists( 'learndash_set_group_enrolled_courses' ) ) {
 			learndash_set_group_enrolled_courses( $group_id, $new_course_ids );
 			$this->log_debug( "Updated course association for group {$group_id}" );
 		}
@@ -690,25 +830,25 @@ class Online_Texas_Core_Admin {
 	 * @since 1.0.0
 	 */
 	public function add_admin_menu() {
-		// Add main menu page instead of submenu
+		// Add main menu page
 		add_menu_page(
-			esc_html__( 'Texas Core', 'online-texas-core' ),           // Page title
-			esc_html__( 'Texas Core', 'online-texas-core' ),           // Menu title
-			'manage_options',                                           // Capability
-			'online-texas-core',                                        // Menu slug
-			array( $this, 'admin_page' ),                              // Callback function
-			'dashicons-networking',                                     // Icon
-			30                                                          // Position
+			esc_html__( 'Texas Core', 'online-texas-core' ),
+			esc_html__( 'Texas Core', 'online-texas-core' ),
+			'manage_options',
+			'online-texas-core',
+			array( $this, 'admin_page' ),
+			'dashicons-networking',
+			30
 		);
 
-		// Add settings as submenu under the main menu
+		// Add settings submenu
 		add_submenu_page(
-			'online-texas-core',                                        // Parent slug
-			esc_html__( 'Texas Core Settings', 'online-texas-core' ),  // Page title
-			esc_html__( 'Settings', 'online-texas-core' ),             // Menu title
-			'manage_options',                                           // Capability
-			'online-texas-core-settings',                               // Menu slug
-			array( $this, 'settings_page' )                            // Callback function
+			'online-texas-core',
+			esc_html__( 'Texas Core Settings', 'online-texas-core' ),
+			esc_html__( 'Settings', 'online-texas-core' ),
+			'manage_options',
+			'online-texas-core-settings',
+			array( $this, 'settings_page' )
 		);
 	}
 
@@ -803,12 +943,11 @@ class Online_Texas_Core_Admin {
 			AND pm.meta_key = '_parent_product_id'"
 		);
 
-		// Get active vendors count - Fixed method
+		// Get active vendors count
 		$vendors_count = 0;
 		if ( function_exists( 'dokan_get_sellers' ) ) {
 			$vendors = dokan_get_sellers( array( 'status' => 'approved' ) );
 			
-			// Check if users array exists and count it
 			if ( isset( $vendors['users'] ) && is_array( $vendors['users'] ) ) {
 				$vendors_count = count( $vendors['users'] );
 			} else {
@@ -847,7 +986,10 @@ class Online_Texas_Core_Admin {
 	 * @since 1.0.0
 	 */
 	public function ajax_manual_vendor_sync() {
-		check_ajax_referer( 'otc_nonce', 'nonce' );
+		// Security checks
+		if ( ! check_ajax_referer( 'otc_nonce', 'nonce', false ) ) {
+			wp_send_json_error( array( 'message' => esc_html__( 'Security check failed', 'online-texas-core' ) ) );
+		}
 
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error( array( 'message' => esc_html__( 'Insufficient permissions', 'online-texas-core' ) ) );
@@ -855,30 +997,34 @@ class Online_Texas_Core_Admin {
 
 		$vendor_id = isset( $_POST['vendor_id'] ) ? sanitize_text_field( $_POST['vendor_id'] ) : '';
 
-		if ( $vendor_id === 'all' ) {
-			$created_count = $this->sync_all_vendors();
-			wp_send_json_success( array( 
-				'message' => sprintf( 
-					/* translators: %d: Number of products created */
-					esc_html__( 'Created %d vendor products', 'online-texas-core' ), 
-					$created_count 
-				)
-			) );
-		} else {
-			$vendor_id = intval( $vendor_id );
-			$created_count = $this->sync_single_vendor( $vendor_id );
-			
-			if ( $created_count !== false ) {
+		try {
+			if ( $vendor_id === 'all' ) {
+				$created_count = $this->sync_all_vendors();
 				wp_send_json_success( array( 
 					'message' => sprintf( 
 						/* translators: %d: Number of products created */
-						esc_html__( 'Created %d products for vendor', 'online-texas-core' ), 
+						esc_html__( 'Created %d vendor products', 'online-texas-core' ), 
 						$created_count 
 					)
 				) );
 			} else {
-				wp_send_json_error( array( 'message' => esc_html__( 'Failed to sync vendor', 'online-texas-core' ) ) );
+				$vendor_id = intval( $vendor_id );
+				$created_count = $this->sync_single_vendor( $vendor_id );
+				
+				if ( $created_count !== false ) {
+					wp_send_json_success( array( 
+						'message' => sprintf( 
+							/* translators: %d: Number of products created */
+							esc_html__( 'Created %d products for vendor', 'online-texas-core' ), 
+							$created_count 
+						)
+					) );
+				} else {
+					wp_send_json_error( array( 'message' => esc_html__( 'Failed to sync vendor', 'online-texas-core' ) ) );
+				}
 			}
+		} catch ( Exception $e ) {
+			wp_send_json_error( array( 'message' => esc_html__( 'Sync failed: ', 'online-texas-core' ) . $e->getMessage() ) );
 		}
 	}
 
@@ -889,6 +1035,10 @@ class Online_Texas_Core_Admin {
 	 * @return int Number of products created.
 	 */
 	private function sync_all_vendors() {
+		if ( ! function_exists( 'dokan_get_sellers' ) ) {
+			return 0;
+		}
+
 		$vendors = dokan_get_sellers( array( 'status' => 'approved' ) );
 		$total_created = 0;
 
@@ -912,7 +1062,7 @@ class Online_Texas_Core_Admin {
 	 * @return int|false Number of products created or false on failure.
 	 */
 	public function sync_single_vendor( $vendor_id ) {
-		if ( ! dokan_is_user_seller( $vendor_id ) ) {
+		if ( ! function_exists( 'dokan_is_user_seller' ) || ! dokan_is_user_seller( $vendor_id ) ) {
 			return false;
 		}
 
@@ -967,7 +1117,10 @@ class Online_Texas_Core_Admin {
 	 * @since 1.0.0
 	 */
 	public function ajax_clear_debug_log() {
-		check_ajax_referer( 'otc_nonce', 'nonce' );
+		// Security checks
+		if ( ! check_ajax_referer( 'otc_nonce', 'nonce', false ) ) {
+			wp_send_json_error( array( 'message' => esc_html__( 'Security check failed', 'online-texas-core' ) ) );
+		}
 
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error( array( 'message' => esc_html__( 'Insufficient permissions', 'online-texas-core' ) ) );
@@ -1003,7 +1156,7 @@ class Online_Texas_Core_Admin {
 			'type'      => sanitize_text_field( $type )
 		);
 
-		// Keep only last 100 entries
+		// Keep only last 100 entries to prevent database bloat
 		if ( count( $log ) > 100 ) {
 			$log = array_slice( $log, -100 );
 		}
