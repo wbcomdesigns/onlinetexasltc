@@ -267,7 +267,7 @@ class Online_Texas_Core_Admin {
 					$this->log_debug( "Created {$created_count} vendor products for admin product {$post_id}" );
 				}
 			} else {
-				// Update existing vendor products
+				// Update existing vendor products (excludes pricing)
 				$this->sync_vendor_products( $post_id );
 			}
 		} catch ( Exception $e ) {
@@ -275,6 +275,87 @@ class Online_Texas_Core_Admin {
 		} finally {
 			delete_transient( 'otc_processing_product_' . $post_id );
 		}
+	}
+
+	/**
+	 * Handle vendor product updates to sync their group price.
+	 * Only syncs from vendor product to vendor group (vendor controls pricing).
+	 *
+	 * @since 1.1.0
+	 * @param int     $post_id The post ID being saved.
+	 * @param WP_Post $post    The post object being saved.
+	 */
+	public function handle_vendor_product_update( $post_id, $post ) {
+		// Early exits for performance
+		if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+			return;
+		}
+
+		if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
+			return;
+		}
+
+		// Only process WooCommerce products
+		if ( ! $this->is_wc_product( $post_id ) ) {
+			return;
+		}
+
+		// Check if this is a vendor product (has parent_product_id)
+		$parent_id = get_post_meta( $post_id, '_parent_product_id', true );
+		if ( ! $parent_id ) {
+			return; // Not a vendor product, so skip
+		}
+
+		// Get the linked group ID
+		$group_id = get_post_meta( $post_id, '_linked_ld_group_id', true );
+		if ( ! $group_id ) {
+			return; // No linked group
+		}
+
+		// Sync vendor product price to their group
+		$this->sync_vendor_product_to_group( $post_id, $group_id );
+
+		// Always update the product URL in case permalink changed
+		$this->update_group_product_url( $group_id, $post_id );
+	}
+
+	/**
+	 * Sync vendor product price to their group price.
+	 * This allows vendors to control pricing for their own products and groups.
+	 *
+	 * @since 1.1.0
+	 * @param int $vendor_product_id The vendor product ID.
+	 * @param int $group_id          The group ID.
+	 */
+	private function sync_vendor_product_to_group( $vendor_product_id, $group_id ) {
+		// Get vendor product price
+		$vendor_product = wc_get_product( $vendor_product_id );
+		if ( ! $vendor_product ) {
+			return;
+		}
+
+		$product_price = $vendor_product->get_regular_price();
+		if ( empty( $product_price ) ) {
+			$product_price = $vendor_product->get_sale_price();
+		}
+		if ( empty( $product_price ) ) {
+			$product_price = $vendor_product->get_price();
+		}
+
+		// Get current group settings
+		$groups_settings = get_post_meta( $group_id, '_groups', true );
+		if ( ! is_array( $groups_settings ) ) {
+			$groups_settings = array();
+		}
+
+		// Update group price to match vendor product price
+		$old_price = isset( $groups_settings['groups_group_price'] ) ? $groups_settings['groups_group_price'] : '';
+		$groups_settings['groups_group_price'] = $product_price;
+
+		// Save updated settings
+		update_post_meta( $group_id, '_groups', $groups_settings );
+
+		$this->log_debug( "Synced vendor product {$vendor_product_id} price ({$product_price}) to group {$group_id}. Previous group price: {$old_price}" );
 	}
 
 	/**
@@ -578,12 +659,13 @@ class Online_Texas_Core_Admin {
 		}
 
 		// Set up group as closed with product link
+		// Price starts empty - will be synced when vendor sets their product price
 		$groups_settings = array(
 			0 => '', // First element is empty
 			'groups_course_short_description' => '',
 			'groups_group_price_type' => 'closed',
 			'groups_custom_button_url' => $product_url,
-			'groups_group_price' => '',
+			'groups_group_price' => '', // Empty initially - vendor controls pricing
 			'groups_group_start_date' => '0',
 			'groups_group_end_date' => '0',
 			'groups_group_seats_limit' => 0,
@@ -628,7 +710,7 @@ class Online_Texas_Core_Admin {
 		// Set vendor as group leader
 		$this->set_group_leader( $group_id, $vendor_id );
 
-		$this->log_debug( "Successfully created closed LearnDash group ID: {$group_id} for vendor: {$vendor_id} with courses: " . implode( ',', $valid_courses ) . " and product URL: {$product_url}" );
+		$this->log_debug( "Successfully created closed LearnDash group ID: {$group_id} for vendor: {$vendor_id} with courses: " . implode( ',', $valid_courses ) . " and product URL: {$product_url}. Price empty - vendor will set pricing." );
 
 		return intval( $group_id );
 	}
@@ -659,7 +741,7 @@ class Online_Texas_Core_Admin {
 	}
 
 	/**
-	 * Update the product URL in a LearnDash group's settings.
+	 * Update the product URL in a LearnDash group's settings (without touching price).
 	 *
 	 * @since 1.1.0
 	 * @param int $group_id    The group ID.
@@ -673,14 +755,14 @@ class Online_Texas_Core_Admin {
 			$groups_settings = array();
 		}
 
-		// Update the product URL
+		// Update ONLY the product URL (preserve vendor's price)
 		$product_url = get_permalink( $product_id );
 		$groups_settings['groups_custom_button_url'] = $product_url;
 
-		// Save updated settings
+		// Save updated settings (price remains unchanged)
 		update_post_meta( $group_id, '_groups', $groups_settings );
 
-		$this->log_debug( "Updated group {$group_id} product URL to: {$product_url}" );
+		$this->log_debug( "Updated group {$group_id} product URL to: {$product_url} (price preserved)" );
 	}
 
 	/**
@@ -756,7 +838,7 @@ class Online_Texas_Core_Admin {
 			}
 
 			// Only sync description for published vendor products
-			// Draft products get full sync
+			// Draft products get full sync (excluding pricing)
 			if ( $vendor_product_post->post_status === 'publish' ) {
 				// Only update description for published products
 				wp_update_post( array(
@@ -764,7 +846,7 @@ class Online_Texas_Core_Admin {
 					'post_content' => $admin_product->get_description()
 				) );
 			} else {
-				// Full sync for draft products
+				// Full sync for draft products (excluding pricing)
 				$this->sync_single_vendor_product( $vendor_product_id, $admin_product );
 			}
 
@@ -777,11 +859,12 @@ class Online_Texas_Core_Admin {
 			$synced_count++;
 		}
 
-		$this->log_debug( "Synced {$synced_count} vendor products for admin product {$admin_product_id}" );
+		$this->log_debug( "Synced {$synced_count} vendor products for admin product {$admin_product_id} (pricing excluded)" );
 	}
 
 	/**
 	 * Sync a single vendor product with its parent admin product.
+	 * Excludes pricing to maintain vendor independence.
 	 *
 	 * @since 1.0.0
 	 * @param int        $vendor_product_id The vendor product ID.
@@ -794,7 +877,7 @@ class Online_Texas_Core_Admin {
 			return;
 		}
 
-		// Sync allowed product fields
+		// Sync allowed product fields (EXCLUDING PRICE - vendor controls pricing)
 		$vendor_product->set_description( $admin_product->get_description() );
 		$vendor_product->set_short_description( $admin_product->get_short_description() );
 		$vendor_product->set_weight( $admin_product->get_weight() );
@@ -802,10 +885,15 @@ class Online_Texas_Core_Admin {
 		$vendor_product->set_virtual( $admin_product->get_virtual() );
 		$vendor_product->set_downloadable( $admin_product->get_downloadable() );
 
+		// DO NOT sync prices - vendor maintains their own pricing:
+		// - set_regular_price() - EXCLUDED
+		// - set_sale_price() - EXCLUDED  
+		// - set_price() - EXCLUDED
+
 		// Save the updated product
 		$vendor_product->save();
 
-		$this->log_debug( "Synced vendor product ID: {$vendor_product_id}" );
+		$this->log_debug( "Synced vendor product ID: {$vendor_product_id} (price excluded to maintain vendor independence)" );
 	}
 
 	/**
