@@ -385,17 +385,9 @@ class Online_Texas_Core_Admin {
 			$store_info = function_exists( 'dokan_get_store_info' ) ? dokan_get_store_info( $vendor_id ) : array();
 			$store_name = ! empty( $store_info['store_name'] ) ? $store_info['store_name'] : $vendor->display_name;
 
-			// Create LearnDash group FIRST
-			$group_id = $this->create_learndash_group( $vendor_id, $course_ids, $store_name . ' - ' . $admin_product->get_name() );
-			if ( ! $group_id ) {
-				throw new Exception( 'Failed to create LearnDash group for vendor product' );
-			}
-
-			// Duplicate the product
+			// Duplicate the product first
 			$duplicated_product = $this->duplicate_product( $admin_product );
 			if ( is_wp_error( $duplicated_product ) ) {
-				// Clean up created group on failure
-				wp_delete_post( $group_id, true );
 				throw new Exception( 'Failed to duplicate product: ' . $duplicated_product->get_error_message() );
 			}
 
@@ -413,7 +405,6 @@ class Online_Texas_Core_Admin {
 			if ( is_wp_error( $update_result ) ) {
 				// Clean up on failure
 				wp_delete_post( $duplicated_product->get_id(), true );
-				wp_delete_post( $group_id, true );
 				throw new Exception( 'Failed to update vendor product: ' . $update_result->get_error_message() );
 			}
 
@@ -427,6 +418,14 @@ class Online_Texas_Core_Admin {
 			delete_post_meta( $duplicated_product->get_id(), '_related_group' );
 			delete_post_meta( $duplicated_product->get_id(), 'learndash_course_enrolled_courses' );
 			delete_post_meta( $duplicated_product->get_id(), 'learndash_group_enrolled_groups' );
+
+			// Create LearnDash group with product ID for URL
+			$group_id = $this->create_learndash_group( $vendor_id, $course_ids, $vendor_product_title, $duplicated_product->get_id() );
+			if ( ! $group_id ) {
+				// Clean up on failure
+				wp_delete_post( $duplicated_product->get_id(), true );
+				throw new Exception( 'Failed to create LearnDash group for vendor product' );
+			}
 
 			// Save metadata - including the group association
 			$meta_data = array(
@@ -442,7 +441,7 @@ class Online_Texas_Core_Admin {
 				update_post_meta( $duplicated_product->get_id(), $key, $value );
 			}
 
-			$this->log_debug( "Created vendor product ID: {$duplicated_product->get_id()} for vendor: {$vendor_id} with group: {$group_id}" );
+			$this->log_debug( "Created vendor product ID: {$duplicated_product->get_id()} for vendor: {$vendor_id} with closed group: {$group_id}" );
 
 			return $duplicated_product->get_id();
 
@@ -532,9 +531,10 @@ class Online_Texas_Core_Admin {
 	 * @param int    $vendor_id           The vendor user ID.
 	 * @param array  $course_ids          Array of course IDs.
 	 * @param string $vendor_product_title The vendor product title.
+	 * @param int    $vendor_product_id   The vendor product ID.
 	 * @return int|false The created group ID or false on failure.
 	 */
-	private function create_learndash_group( $vendor_id, $course_ids, $vendor_product_title ) {
+	private function create_learndash_group( $vendor_id, $course_ids, $vendor_product_title, $vendor_product_id = null ) {
 		if ( ! function_exists( 'learndash_get_post_type_slug' ) ) {
 			$this->log_debug( 'LearnDash functions not available', 'error' );
 			return false;
@@ -571,7 +571,56 @@ class Online_Texas_Core_Admin {
 			return false;
 		}
 
-		// Link group to courses
+		// Get the product URL for the button
+		$product_url = '';
+		if ( $vendor_product_id ) {
+			$product_url = get_permalink( $vendor_product_id );
+		}
+
+		// Set up group as closed with product link
+		$groups_settings = array(
+			0 => '', // First element is empty
+			'groups_course_short_description' => '',
+			'groups_group_price_type' => 'closed',
+			'groups_custom_button_url' => $product_url,
+			'groups_group_price' => '',
+			'groups_group_start_date' => '0',
+			'groups_group_end_date' => '0',
+			'groups_group_seats_limit' => 0,
+			'groups_group_price_billing_p3' => '',
+			'groups_group_price_type_subscribe_billing_recurring_times' => '',
+			'groups_group_price_billing_t3' => '',
+			'groups_group_trial_price' => '',
+			'groups_group_trial_duration_t1' => '',
+			'groups_group_trial_duration_p1' => '',
+			'groups_group_materials_enabled' => '',
+			'groups_group_materials' => '',
+			'groups_certificate' => '',
+			'groups_group_disable_content_table' => '',
+			'groups_group_courses_order_enabled' => '',
+			'groups_group_courses_orderby' => '',
+			'groups_group_courses_order' => ''
+		);
+
+		// Save group settings
+		update_post_meta( $group_id, '_groups', $groups_settings );
+		
+		// Set LearnDash price type to closed
+		update_post_meta( $group_id, '_ld_price_type', 'closed' );
+		
+		// Set related courses
+		update_post_meta( $group_id, '_related_course', $valid_courses );
+
+		// Additional LearnDash Course Grid meta (if plugin is active)
+		update_post_meta( $group_id, '_learndash_course_grid_short_description', '' );
+		update_post_meta( $group_id, '_learndash_course_grid_duration', '' );
+		update_post_meta( $group_id, '_learndash_course_grid_enable_video_preview', '0' );
+		update_post_meta( $group_id, '_learndash_course_grid_video_embed_code', '' );
+		update_post_meta( $group_id, '_learndash_course_grid_custom_button_text', '' );
+		update_post_meta( $group_id, '_learndash_course_grid_custom_ribbon_text', '' );
+		update_post_meta( $group_id, '_ld_certificate', '' );
+
+		// Link group to courses using LearnDash function
 		if ( function_exists( 'learndash_set_group_enrolled_courses' ) ) {
 			learndash_set_group_enrolled_courses( $group_id, $valid_courses );
 		}
@@ -579,7 +628,7 @@ class Online_Texas_Core_Admin {
 		// Set vendor as group leader
 		$this->set_group_leader( $group_id, $vendor_id );
 
-		$this->log_debug( "Successfully created LearnDash group ID: {$group_id} for vendor: {$vendor_id} with courses: " . implode( ',', $valid_courses ) );
+		$this->log_debug( "Successfully created closed LearnDash group ID: {$group_id} for vendor: {$vendor_id} with courses: " . implode( ',', $valid_courses ) . " and product URL: {$product_url}" );
 
 		return intval( $group_id );
 	}
@@ -607,6 +656,31 @@ class Online_Texas_Core_Admin {
 			$group_leaders[] = $user_id;
 			update_post_meta( $group_id, 'learndash_group_leaders', $group_leaders );
 		}
+	}
+
+	/**
+	 * Update the product URL in a LearnDash group's settings.
+	 *
+	 * @since 1.1.0
+	 * @param int $group_id    The group ID.
+	 * @param int $product_id  The product ID.
+	 */
+	private function update_group_product_url( $group_id, $product_id ) {
+		// Get current group settings
+		$groups_settings = get_post_meta( $group_id, '_groups', true );
+		
+		if ( ! is_array( $groups_settings ) ) {
+			$groups_settings = array();
+		}
+
+		// Update the product URL
+		$product_url = get_permalink( $product_id );
+		$groups_settings['groups_custom_button_url'] = $product_url;
+
+		// Save updated settings
+		update_post_meta( $group_id, '_groups', $groups_settings );
+
+		$this->log_debug( "Updated group {$group_id} product URL to: {$product_url}" );
 	}
 
 	/**

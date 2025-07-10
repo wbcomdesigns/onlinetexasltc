@@ -1,8 +1,8 @@
 <?php
 /**
- * Provide a settings page view for the plugin
+ * Provide a admin area view for the plugin
  *
- * This file is used to markup the settings page of the plugin.
+ * This file is used to markup the admin-facing aspects of the plugin.
  *
  * @link       https://wbcomdesigns.com/
  * @since      1.0.0
@@ -15,244 +15,282 @@
 if ( ! defined( 'WPINC' ) ) {
 	die;
 }
-
-// Set default values
-$defaults = array(
-	'auto_create_for_new_vendors' => true,
-	'debug_mode'                  => false,
-	'vendor_product_status'       => 'draft'
-);
-
-$options = wp_parse_args( $options, $defaults );
 ?>
 
 <div class="wrap">
 	<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
 
-	<form method="post" action="">
-		<?php wp_nonce_field( 'otc_save_settings', 'otc_settings_nonce' ); ?>
-		
-		<table class="form-table">
-			<tbody>
-				<tr>
-					<th scope="row">
-						<label for="auto_create_for_new_vendors">
-							<?php esc_html_e( 'Auto-create Products for New Vendors', 'online-texas-core' ); ?>
-						</label>
-					</th>
-					<td>
-						<fieldset>
-							<legend class="screen-reader-text">
-								<span><?php esc_html_e( 'Auto-create Products for New Vendors', 'online-texas-core' ); ?></span>
-							</legend>
-							<label for="auto_create_for_new_vendors">
-								<input name="auto_create_for_new_vendors" type="checkbox" id="auto_create_for_new_vendors" value="1" <?php checked( $options['auto_create_for_new_vendors'] ); ?> />
-								<?php esc_html_e( 'Automatically create vendor products when someone becomes a vendor', 'online-texas-core' ); ?>
-							</label>
-						</fieldset>
-					</td>
-				</tr>
+	<div class="otc-dashboard">
+		<!-- Statistics Overview -->
+		<div class="card">
+			<h2><?php esc_html_e( 'Overview', 'online-texas-core' ); ?></h2>
+			<div class="otc-stats-grid">
+				<div class="otc-stat-item">
+					<div class="otc-stat-number"><?php echo esc_html( $stats['admin_products'] ); ?></div>
+					<div class="otc-stat-label"><?php esc_html_e( 'Admin Products with Courses', 'online-texas-core' ); ?></div>
+				</div>
+				<div class="otc-stat-item">
+					<div class="otc-stat-number"><?php echo esc_html( $stats['vendor_products'] ); ?></div>
+					<div class="otc-stat-label"><?php esc_html_e( 'Vendor Products Created', 'online-texas-core' ); ?></div>
+				</div>
+				<div class="otc-stat-item">
+					<div class="otc-stat-number"><?php echo esc_html( $stats['active_vendors'] ); ?></div>
+					<div class="otc-stat-label"><?php esc_html_e( 'Active Vendors', 'online-texas-core' ); ?></div>
+				</div>
+				<div class="otc-stat-item">
+					<div class="otc-stat-number"><?php echo esc_html( $stats['learndash_groups'] ); ?></div>
+					<div class="otc-stat-label"><?php esc_html_e( 'LearnDash Groups', 'online-texas-core' ); ?></div>
+				</div>
+			</div>
+		</div>
 
-				<tr>
-					<th scope="row">
-						<label for="vendor_product_status">
-							<?php esc_html_e( 'New Vendor Product Status', 'online-texas-core' ); ?>
-						</label>
-					</th>
-					<td>
-						<select name="vendor_product_status" id="vendor_product_status">
-							<option value="draft" <?php selected( $options['vendor_product_status'], 'draft' ); ?>>
-								<?php esc_html_e( 'Draft', 'online-texas-core' ); ?>
-							</option>
-							<option value="pending" <?php selected( $options['vendor_product_status'], 'pending' ); ?>>
-								<?php esc_html_e( 'Pending Review', 'online-texas-core' ); ?>
-							</option>
-							<option value="publish" <?php selected( $options['vendor_product_status'], 'publish' ); ?>>
-								<?php esc_html_e( 'Published', 'online-texas-core' ); ?>
-							</option>
-						</select>
-						<p class="description">
-							<?php esc_html_e( 'Default status for newly created vendor products. Draft is recommended to let vendors review before publishing.', 'online-texas-core' ); ?>
-						</p>
-					</td>
-				</tr>
+		<!-- Quick Actions -->
+		<div class="card">
+			<h2><?php esc_html_e( 'Quick Actions', 'online-texas-core' ); ?></h2>
+			<div class="otc-actions-grid">
+				<div class="otc-action-item">
+					<button type="button" class="button button-primary button-large" id="otc-sync-all-vendors">
+						<?php esc_html_e( 'Sync All Vendors', 'online-texas-core' ); ?>
+					</button>
+					<p class="description">
+						<?php esc_html_e( 'Create missing vendor products for all active vendors.', 'online-texas-core' ); ?>
+					</p>
+				</div>
+				<div class="otc-action-item">
+					<a href="<?php echo esc_url( admin_url( 'admin.php?page=online-texas-core-settings' ) ); ?>" class="button button-secondary button-large">
+						<?php esc_html_e( 'Plugin Settings', 'online-texas-core' ); ?>
+					</a>
+					<p class="description">
+						<?php esc_html_e( 'Configure plugin behavior and options.', 'online-texas-core' ); ?>
+					</p>
+				</div>
+				<div class="otc-action-item">
+					<button type="button" class="button button-secondary button-large" id="otc-clear-debug-log">
+						<?php esc_html_e( 'Clear Debug Log', 'online-texas-core' ); ?>
+					</button>
+					<p class="description">
+						<?php esc_html_e( 'Clear all debug log entries.', 'online-texas-core' ); ?>
+					</p>
+				</div>
+			</div>
+		</div>
 
-				<tr>
-					<th scope="row">
-						<label for="debug_mode">
-							<?php esc_html_e( 'Debug Mode', 'online-texas-core' ); ?>
-						</label>
-					</th>
-					<td>
-						<fieldset>
-							<legend class="screen-reader-text">
-								<span><?php esc_html_e( 'Debug Mode', 'online-texas-core' ); ?></span>
-							</legend>
-							<label for="debug_mode">
-								<input name="debug_mode" type="checkbox" id="debug_mode" value="1" <?php checked( $options['debug_mode'] ); ?> />
-								<?php esc_html_e( 'Enable detailed logging for troubleshooting', 'online-texas-core' ); ?>
-							</label>
-							<p class="description">
-								<?php esc_html_e( 'Enable this only when troubleshooting issues. Debug logs can be viewed in the main plugin page.', 'online-texas-core' ); ?>
-							</p>
-						</fieldset>
-					</td>
-				</tr>
-			</tbody>
-		</table>
+		<!-- Manual Vendor Sync -->
+		<div class="card">
+			<h2><?php esc_html_e( 'Manual Vendor Sync', 'online-texas-core' ); ?></h2>
+			
+			<?php
+			if ( function_exists( 'dokan_get_sellers' ) ) {
+				$vendors = dokan_get_sellers( array( 'status' => 'approved' ) );
+				
+				if ( ! empty( $vendors['users'] ) ) :
+			?>
+			<div class="otc-vendor-sync-section">
+				<p><?php esc_html_e( 'Select specific vendors to sync with admin products:', 'online-texas-core' ); ?></p>
+				
+				<table class="wp-list-table widefat fixed striped">
+					<thead>
+						<tr>
+							<th><?php esc_html_e( 'Vendor', 'online-texas-core' ); ?></th>
+							<th><?php esc_html_e( 'Status', 'online-texas-core' ); ?></th>
+							<th><?php esc_html_e( 'Products', 'online-texas-core' ); ?></th>
+							<th><?php esc_html_e( 'Action', 'online-texas-core' ); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php
+						foreach ( $vendors['users'] as $vendor ) :
+							$is_enabled = function_exists( 'dokan_is_seller_enabled' ) ? dokan_is_seller_enabled( $vendor->ID ) : true;
+							
+							// Count vendor products
+							global $wpdb;
+							$product_count = $wpdb->get_var( $wpdb->prepare(
+								"SELECT COUNT(*) FROM {$wpdb->posts} p 
+								INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id 
+								WHERE p.post_type = 'product' 
+								AND p.post_author = %d 
+								AND pm.meta_key = '_parent_product_id'",
+								$vendor->ID
+							) );
+						?>
+						<tr>
+							<td>
+								<strong><?php echo esc_html( $vendor->display_name ); ?></strong><br>
+								<small><?php echo esc_html( $vendor->user_email ); ?></small>
+							</td>
+							<td>
+								<span class="otc-status <?php echo $is_enabled ? 'otc-status-active' : 'otc-status-inactive'; ?>">
+									<?php echo $is_enabled ? esc_html__( 'Active', 'online-texas-core' ) : esc_html__( 'Inactive', 'online-texas-core' ); ?>
+								</span>
+							</td>
+							<td><?php echo esc_html( intval( $product_count ) ); ?></td>
+							<td>
+								<button type="button" class="button button-small otc-sync-vendor" 
+								        data-vendor-id="<?php echo esc_attr( $vendor->ID ); ?>">
+									<?php esc_html_e( 'Sync This Vendor', 'online-texas-core' ); ?>
+								</button>
+							</td>
+						</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			</div>
+			<?php 
+				else :
+			?>
+			<p><?php esc_html_e( 'No active vendors found.', 'online-texas-core' ); ?></p>
+			<?php 
+				endif;
+			} else {
+			?>
+			<div class="notice notice-warning inline">
+				<p><?php esc_html_e( 'Dokan plugin is not active. Vendor sync functionality is not available.', 'online-texas-core' ); ?></p>
+			</div>
+			<?php } ?>
+		</div>
 
-		<?php submit_button(); ?>
-	</form>
+		<!-- Debug Log (if enabled) -->
+		<?php
+		$options = get_option( 'otc_options', array() );
+		if ( ! empty( $options['debug_mode'] ) ) :
+			$debug_log = get_option( 'otc_debug_log', array() );
+			if ( ! empty( $debug_log ) ) :
+		?>
+		<div class="card">
+			<h2><?php esc_html_e( 'Recent Debug Log', 'online-texas-core' ); ?></h2>
+			<div class="otc-debug-log">
+				<?php foreach ( array_reverse( array_slice( $debug_log, -20 ) ) as $entry ) : ?>
+				<div class="otc-log-entry otc-log-<?php echo esc_attr( $entry['type'] ); ?>">
+					<span class="otc-log-time"><?php echo esc_html( $entry['timestamp'] ); ?></span>
+					<span class="otc-log-message"><?php echo esc_html( $entry['message'] ); ?></span>
+				</div>
+				<?php endforeach; ?>
+			</div>
+		</div>
+		<?php 
+			endif;
+		endif; 
+		?>
 
-	<hr>
-
-	<!-- Quick Actions -->
-	<div class="card">
-		<h2><?php esc_html_e( 'Quick Actions', 'online-texas-core' ); ?></h2>
-		
-		<table class="form-table">
-			<tbody>
-				<tr>
-					<th scope="row"><?php esc_html_e( 'Vendor Management', 'online-texas-core' ); ?></th>
-					<td>
-						<a href="<?php echo esc_url( admin_url( 'admin.php?page=online-texas-core' ) ); ?>" class="button button-secondary">
-							<?php esc_html_e( 'Manage Vendor Sync', 'online-texas-core' ); ?>
-						</a>
-						<p class="description">
-							<?php esc_html_e( 'View statistics and manually sync vendor products.', 'online-texas-core' ); ?>
-						</p>
-					</td>
-				</tr>
-
-				<tr>
-					<th scope="row"><?php esc_html_e( 'Debug Log', 'online-texas-core' ); ?></th>
-					<td>
-						<button type="button" class="button button-secondary" id="otc-clear-debug-log">
-							<?php esc_html_e( 'Clear Debug Log', 'online-texas-core' ); ?>
-						</button>
-						<p class="description">
-							<?php esc_html_e( 'Clear all debug log entries.', 'online-texas-core' ); ?>
-						</p>
-					</td>
-				</tr>
-			</tbody>
-		</table>
+		<!-- System Status -->
+		<div class="card">
+			<h2><?php esc_html_e( 'System Status', 'online-texas-core' ); ?></h2>
+			<table class="widefat">
+				<tbody>
+					<tr>
+						<td><strong><?php esc_html_e( 'WordPress Version', 'online-texas-core' ); ?></strong></td>
+						<td><?php echo esc_html( get_bloginfo( 'version' ) ); ?></td>
+					</tr>
+					<tr>
+						<td><strong><?php esc_html_e( 'WooCommerce', 'online-texas-core' ); ?></strong></td>
+						<td>
+							<?php if ( defined( 'WC_VERSION' ) ) : ?>
+								<span class="otc-status otc-status-active"><?php echo esc_html( WC_VERSION ); ?></span>
+							<?php else : ?>
+								<span class="otc-status otc-status-inactive"><?php esc_html_e( 'Not Active', 'online-texas-core' ); ?></span>
+							<?php endif; ?>
+						</td>
+					</tr>
+					<tr>
+						<td><strong><?php esc_html_e( 'Dokan', 'online-texas-core' ); ?></strong></td>
+						<td>
+							<?php if ( defined( 'DOKAN_PLUGIN_VERSION' ) ) : ?>
+								<span class="otc-status otc-status-active"><?php echo esc_html( DOKAN_PLUGIN_VERSION ); ?></span>
+							<?php else : ?>
+								<span class="otc-status otc-status-inactive"><?php esc_html_e( 'Not Active', 'online-texas-core' ); ?></span>
+							<?php endif; ?>
+						</td>
+					</tr>
+					<tr>
+						<td><strong><?php esc_html_e( 'LearnDash', 'online-texas-core' ); ?></strong></td>
+						<td>
+							<?php if ( defined( 'LEARNDASH_VERSION' ) ) : ?>
+								<span class="otc-status otc-status-active"><?php echo esc_html( LEARNDASH_VERSION ); ?></span>
+							<?php else : ?>
+								<span class="otc-status otc-status-inactive"><?php esc_html_e( 'Not Active', 'online-texas-core' ); ?></span>
+							<?php endif; ?>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
 	</div>
 
-	<!-- Current Settings Summary -->
-	<div class="card">
-		<h2><?php esc_html_e( 'Current Configuration', 'online-texas-core' ); ?></h2>
-		
-		<table class="widefat">
-			<tbody>
-				<tr>
-					<td><strong><?php esc_html_e( 'Auto-create for New Vendors', 'online-texas-core' ); ?></strong></td>
-					<td>
-						<span class="otc-status <?php echo $options['auto_create_for_new_vendors'] ? 'otc-status-active' : 'otc-status-inactive'; ?>">
-							<?php echo $options['auto_create_for_new_vendors'] ? esc_html__( 'Enabled', 'online-texas-core' ) : esc_html__( 'Disabled', 'online-texas-core' ); ?>
-						</span>
-					</td>
-				</tr>
-				<tr>
-					<td><strong><?php esc_html_e( 'New Product Status', 'online-texas-core' ); ?></strong></td>
-					<td><?php echo esc_html( ucfirst( $options['vendor_product_status'] ) ); ?></td>
-				</tr>
-				<tr>
-					<td><strong><?php esc_html_e( 'Debug Mode', 'online-texas-core' ); ?></strong></td>
-					<td>
-						<span class="otc-status <?php echo $options['debug_mode'] ? 'otc-status-active' : 'otc-status-inactive'; ?>">
-							<?php echo $options['debug_mode'] ? esc_html__( 'Enabled', 'online-texas-core' ) : esc_html__( 'Disabled', 'online-texas-core' ); ?>
-						</span>
-					</td>
-				</tr>
-			</tbody>
-		</table>
-	</div>
-
-	<!-- Plugin Information -->
-	<div class="card">
-		<h2><?php esc_html_e( 'How It Works', 'online-texas-core' ); ?></h2>
-		
-		<ol>
-			<li>
-				<strong><?php esc_html_e( 'Admin Creates Product:', 'online-texas-core' ); ?></strong>
-				<?php esc_html_e( 'When an admin creates a WooCommerce product and links it to LearnDash courses, the plugin detects this.', 'online-texas-core' ); ?>
-			</li>
-			<li>
-				<strong><?php esc_html_e( 'Vendor Products Created:', 'online-texas-core' ); ?></strong>
-				<?php esc_html_e( 'The plugin automatically creates duplicate products for all active vendors with the format "Store Name - Product Name".', 'online-texas-core' ); ?>
-			</li>
-			<li>
-				<strong><?php esc_html_e( 'LearnDash Groups:', 'online-texas-core' ); ?></strong>
-				<?php esc_html_e( 'Each vendor product gets its own LearnDash group linked to the same courses, with the vendor as group leader.', 'online-texas-core' ); ?>
-			</li>
-			<li>
-				<strong><?php esc_html_e( 'Vendor Customization:', 'online-texas-core' ); ?></strong>
-				<?php esc_html_e( 'Vendors can set their own pricing and publish when ready. Pricing remains independent.', 'online-texas-core' ); ?>
-			</li>
-			<li>
-				<strong><?php esc_html_e( 'Automatic Updates:', 'online-texas-core' ); ?></strong>
-				<?php esc_html_e( 'When admin updates the base product, vendor products sync automatically (description only for published products).', 'online-texas-core' ); ?>
-			</li>
-		</ol>
-	</div>
-
-	<!-- Requirements -->
-	<div class="card">
-		<h2><?php esc_html_e( 'Requirements', 'online-texas-core' ); ?></h2>
-		
-		<p><?php esc_html_e( 'This plugin requires the following plugins to be installed and active:', 'online-texas-core' ); ?></p>
-		
-		<ul>
-			<li>
-				<strong><?php esc_html_e( 'WooCommerce', 'online-texas-core' ); ?>:</strong>
-				<?php if ( defined( 'WC_VERSION' ) ) : ?>
-					<span class="otc-status otc-status-active"><?php printf( esc_html__( 'Active (v%s)', 'online-texas-core' ), esc_html( WC_VERSION ) ); ?></span>
-				<?php else : ?>
-					<span class="otc-status otc-status-inactive"><?php esc_html_e( 'Not Active', 'online-texas-core' ); ?></span>
-				<?php endif; ?>
-			</li>
-			<li>
-				<strong><?php esc_html_e( 'Dokan', 'online-texas-core' ); ?>:</strong>
-				<?php if ( defined( 'DOKAN_PLUGIN_VERSION' ) ) : ?>
-					<span class="otc-status otc-status-active"><?php printf( esc_html__( 'Active (v%s)', 'online-texas-core' ), esc_html( DOKAN_PLUGIN_VERSION ) ); ?></span>
-				<?php else : ?>
-					<span class="otc-status otc-status-inactive"><?php esc_html_e( 'Not Active', 'online-texas-core' ); ?></span>
-				<?php endif; ?>
-			</li>
-			<li>
-				<strong><?php esc_html_e( 'LearnDash', 'online-texas-core' ); ?>:</strong>
-				<?php if ( defined( 'LEARNDASH_VERSION' ) ) : ?>
-					<span class="otc-status otc-status-active"><?php printf( esc_html__( 'Active (v%s)', 'online-texas-core' ), esc_html( LEARNDASH_VERSION ) ); ?></span>
-				<?php else : ?>
-					<span class="otc-status otc-status-inactive"><?php esc_html_e( 'Not Active', 'online-texas-core' ); ?></span>
-				<?php endif; ?>
-			</li>
-		</ul>
+	<!-- Loading overlay -->
+	<div id="otc-loading-overlay" style="display: none;">
+		<div class="otc-loading-spinner"></div>
+		<div class="otc-loading-text"><?php esc_html_e( 'Processing...', 'online-texas-core' ); ?></div>
 	</div>
 </div>
 
 <script type="text/javascript">
 jQuery(document).ready(function($) {
+	// Sync all vendors
+	$('#otc-sync-all-vendors').on('click', function() {
+		if (confirm('<?php echo esc_js( __( 'This will create missing products for all vendors. Continue?', 'online-texas-core' ) ); ?>')) {
+			var button = $(this);
+			var originalText = button.text();
+			
+			button.prop('disabled', true).text('<?php echo esc_js( __( 'Syncing...', 'online-texas-core' ) ); ?>');
+			$('#otc-loading-overlay').show();
+			
+			$.post(otc_ajax.ajax_url, {
+				action: 'otc_manual_vendor_sync',
+				vendor_id: 'all',
+				nonce: otc_ajax.nonce
+			}, function(response) {
+				if (response.success) {
+					alert(response.data.message);
+					location.reload();
+				} else {
+					alert('<?php echo esc_js( __( 'Error:', 'online-texas-core' ) ); ?> ' + response.data.message);
+				}
+			}).always(function() {
+				button.prop('disabled', false).text(originalText);
+				$('#otc-loading-overlay').hide();
+			});
+		}
+	});
+	
+	// Sync individual vendor
+	$('.otc-sync-vendor').on('click', function() {
+		var button = $(this);
+		var vendorId = button.data('vendor-id');
+		var originalText = button.text();
+		
+		button.prop('disabled', true).text('<?php echo esc_js( __( 'Syncing...', 'online-texas-core' ) ); ?>');
+		
+		$.post(otc_ajax.ajax_url, {
+			action: 'otc_manual_vendor_sync',
+			vendor_id: vendorId,
+			nonce: otc_ajax.nonce
+		}, function(response) {
+			if (response.success) {
+				alert(response.data.message);
+			} else {
+				alert('<?php echo esc_js( __( 'Error:', 'online-texas-core' ) ); ?> ' + response.data.message);
+			}
+		}).always(function() {
+			button.prop('disabled', false).text(originalText);
+		});
+	});
+	
 	// Clear debug log
 	$('#otc-clear-debug-log').on('click', function() {
 		if (confirm('<?php echo esc_js( __( 'Are you sure you want to clear the debug log?', 'online-texas-core' ) ); ?>')) {
 			var button = $(this);
-			var originalText = button.text();
 			
-			button.prop('disabled', true).text('<?php echo esc_js( __( 'Clearing...', 'online-texas-core' ) ); ?>');
+			button.prop('disabled', true);
 			
-			$.post(ajaxurl, {
+			$.post(otc_ajax.ajax_url, {
 				action: 'otc_clear_debug_log',
-				nonce: '<?php echo esc_js( wp_create_nonce( 'otc_nonce' ) ); ?>'
+				nonce: otc_ajax.nonce
 			}, function(response) {
 				if (response.success) {
-					alert('<?php echo esc_js( __( 'Debug log cleared successfully.', 'online-texas-core' ) ); ?>');
-				} else {
-					alert('<?php echo esc_js( __( 'Failed to clear debug log.', 'online-texas-core' ) ); ?>');
+					$('.otc-debug-log').html('<p><?php echo esc_js( __( 'Debug log cleared.', 'online-texas-core' ) ); ?></p>');
 				}
 			}).always(function() {
-				button.prop('disabled', false).text(originalText);
+				button.prop('disabled', false);
 			});
 		}
 	});

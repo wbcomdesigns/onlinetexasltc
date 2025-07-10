@@ -6,7 +6,7 @@
  * A class definition that includes attributes and functions used across both the
  * public-facing side of the site and the admin area.
  *
- * @link       https://https://wbcomdesigns.com/
+ * @link       https://wbcomdesigns.com/
  * @since      1.0.0
  *
  * @package    Online_Texas_Core
@@ -25,7 +25,7 @@
  * @since      1.0.0
  * @package    Online_Texas_Core
  * @subpackage Online_Texas_Core/includes
- * @author     Wbcom <admin@wbcomdesigns.com>
+ * @author     Wbcom Designs <admin@wbcomdesigns.com>
  */
 class Online_Texas_Core {
 
