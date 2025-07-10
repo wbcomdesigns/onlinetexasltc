@@ -315,27 +315,34 @@ class Online_Texas_Core_Admin {
 			$duplicated_product->set_sale_price( '' );
 			$duplicated_product->save();
 
-			// Create LearnDash group
+			// Create LearnDash group FIRST
 			$group_id = $this->create_learndash_group( $vendor_id, $course_ids, $vendor_product_title );
 
-			// Save metadata
+			if ( ! $group_id ) {
+				throw new Exception( 'Failed to create LearnDash group for vendor product' );
+			}
+
+			// IMPORTANT: Remove any copied course/group associations from admin product
+			delete_post_meta( $duplicated_product->get_id(), '_related_course' );
+			delete_post_meta( $duplicated_product->get_id(), '_related_group' );
+			delete_post_meta( $duplicated_product->get_id(), 'learndash_course_enrolled_courses' );
+			delete_post_meta( $duplicated_product->get_id(), 'learndash_group_enrolled_groups' );
+
+			// Save metadata - including the group association
 			$meta_data = array(
 				'_parent_product_id'              => $admin_product_id,
-				'_linked_ld_group_id'             => $group_id,
+				'_linked_ld_group_id'             => $group_id,  // Single group ID
 				'_vendor_product_original_title'  => $admin_product->get_name(),
-				'_created_on'                     => current_time( 'mysql' )
+				'_created_on'                     => current_time( 'mysql' ),
+				'_related_group'                  => array( $group_id ), // Array format for LearnDash
+				'learndash_group_enrolled_groups' => array( $group_id )  // Array format for LearnDash
 			);
 
 			foreach ( $meta_data as $key => $value ) {
 				update_post_meta( $duplicated_product->get_id(), $key, $value );
 			}
 
-			// Link product to LearnDash group
-			if ( $group_id ) {
-				update_post_meta( $duplicated_product->get_id(), 'learndash_group_enrolled_groups', array( $group_id ) );
-			}
-
-			$this->log_debug( "Created vendor product ID: {$duplicated_product->get_id()} for vendor: {$vendor_id}" );
+			$this->log_debug( "Created vendor product ID: {$duplicated_product->get_id()} for vendor: {$vendor_id} with group: {$group_id}" );
 
 			return $duplicated_product->get_id();
 
@@ -683,23 +690,25 @@ class Online_Texas_Core_Admin {
 	 * @since 1.0.0
 	 */
 	public function add_admin_menu() {
-		// Add main menu page
-		add_submenu_page(
-			'dokan',
-			esc_html__( 'Texas Core', 'online-texas-core' ),
-			esc_html__( 'Texas Core', 'online-texas-core' ),
-			'manage_options',
-			'online-texas-core',
-			array( $this, 'admin_page' )
+		// Add main menu page instead of submenu
+		add_menu_page(
+			esc_html__( 'Texas Core', 'online-texas-core' ),           // Page title
+			esc_html__( 'Texas Core', 'online-texas-core' ),           // Menu title
+			'manage_options',                                           // Capability
+			'online-texas-core',                                        // Menu slug
+			array( $this, 'admin_page' ),                              // Callback function
+			'dashicons-networking',                                     // Icon
+			30                                                          // Position
 		);
 
-		// Add settings page
-		add_options_page(
-			esc_html__( 'Texas Core Settings', 'online-texas-core' ),
-			esc_html__( 'Texas Core', 'online-texas-core' ),
-			'manage_options',
-			'online-texas-core-settings',
-			array( $this, 'settings_page' )
+		// Add settings as submenu under the main menu
+		add_submenu_page(
+			'online-texas-core',                                        // Parent slug
+			esc_html__( 'Texas Core Settings', 'online-texas-core' ),  // Page title
+			esc_html__( 'Settings', 'online-texas-core' ),             // Menu title
+			'manage_options',                                           // Capability
+			'online-texas-core-settings',                               // Menu slug
+			array( $this, 'settings_page' )                            // Callback function
 		);
 	}
 
@@ -794,13 +803,35 @@ class Online_Texas_Core_Admin {
 			AND pm.meta_key = '_parent_product_id'"
 		);
 
-		// Get active vendors count
+		// Get active vendors count - Fixed method
 		$vendors_count = 0;
-		$vendors = dokan_get_sellers( array( 'status' => 'approved' ) );
-		$vendors_count = $vendors['total_users'] ?? 0;
+		if ( function_exists( 'dokan_get_sellers' ) ) {
+			$vendors = dokan_get_sellers( array( 'status' => 'approved' ) );
+			
+			// Check if users array exists and count it
+			if ( isset( $vendors['users'] ) && is_array( $vendors['users'] ) ) {
+				$vendors_count = count( $vendors['users'] );
+			} else {
+				// Fallback: Count directly from database
+				$vendors_count = $wpdb->get_var(
+					"SELECT COUNT(u.ID) 
+					FROM {$wpdb->users} u 
+					INNER JOIN {$wpdb->usermeta} um1 ON u.ID = um1.user_id 
+					INNER JOIN {$wpdb->usermeta} um2 ON u.ID = um2.user_id 
+					WHERE um1.meta_key = 'wp_capabilities' 
+					AND um1.meta_value LIKE '%seller%' 
+					AND um2.meta_key = 'dokan_enable_selling' 
+					AND um2.meta_value = 'yes'"
+				);
+			}
+		}
 
 		// Get LearnDash groups count
-		$groups_count = wp_count_posts( learndash_get_post_type_slug( 'group' ) )->publish ?? 0;
+		$groups_count = 0;
+		if ( function_exists( 'learndash_get_post_type_slug' ) ) {
+			$groups_posts = wp_count_posts( learndash_get_post_type_slug( 'group' ) );
+			$groups_count = isset( $groups_posts->publish ) ? $groups_posts->publish : 0;
+		}
 
 		return array(
 			'admin_products'   => intval( $admin_products_count ),

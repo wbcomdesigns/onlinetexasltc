@@ -57,7 +57,7 @@ if ( ! defined( 'WPINC' ) ) {
 					</p>
 				</div>
 				<div class="otc-action-item">
-					<a href="<?php echo esc_url( admin_url( 'options-general.php?page=online-texas-core-settings' ) ); ?>" class="button button-secondary button-large">
+					<a href="<?php echo esc_url( admin_url( 'admin.php?page=online-texas-core-settings' ) ); ?>" class="button button-secondary button-large">
 						<?php esc_html_e( 'Plugin Settings', 'online-texas-core' ); ?>
 					</a>
 					<p class="description">
@@ -141,12 +141,12 @@ if ( ! defined( 'WPINC' ) ) {
 			<p><?php esc_html_e( 'No active vendors found.', 'online-texas-core' ); ?></p>
 			<?php 
 				endif;
-			else :
+			} else {
 			?>
 			<div class="notice notice-warning inline">
 				<p><?php esc_html_e( 'Dokan plugin is not active. Vendor sync functionality is not available.', 'online-texas-core' ); ?></p>
 			</div>
-			<?php endif; ?>
+			<?php } ?>
 		</div>
 
 		<!-- Debug Log (if enabled) -->
