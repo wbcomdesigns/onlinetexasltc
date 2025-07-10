@@ -407,13 +407,19 @@ class Online_Texas_Core_Admin {
 			return 0;
 		}
 
+		// Get the admin user ID who created the original product
+		$admin_product = get_post( $admin_product_id );
+		$admin_user_id = $admin_product ? $admin_product->post_author : 0;
+
 		$created_count = 0;
+		$skipped_admin_count = 0;
 		$options = get_option( 'otc_options', array() );
 
 		foreach ( $vendors['users'] as $vendor ) {
-			// Skip admin users - they shouldn't get vendor products for their own products
-			if ( user_can( $vendor->ID, 'manage_options' ) ) {
-				$this->log_debug( "Skipping admin user {$vendor->ID} from vendor product creation" );
+			// Skip the admin user who created the original product
+			if ( $vendor->ID == $admin_user_id ) {
+				$this->log_debug( "Skipping admin user {$vendor->ID} (product author) from vendor product creation" );
+				$skipped_admin_count++;
 				continue;
 			}
 
@@ -432,6 +438,10 @@ class Online_Texas_Core_Admin {
 			if ( $result ) {
 				$created_count++;
 			}
+		}
+
+		if ( $skipped_admin_count > 0 ) {
+			$this->log_debug( "Skipped {$skipped_admin_count} admin users during vendor product creation" );
 		}
 
 		return $created_count;
@@ -461,12 +471,6 @@ class Online_Texas_Core_Admin {
 			$vendor = get_user_by( 'ID', $vendor_id );
 			if ( ! $vendor ) {
 				throw new Exception( "Invalid vendor ID: {$vendor_id}" );
-			}
-
-			// Skip admin users - they shouldn't get vendor products for their own products
-			if ( user_can( $vendor_id, 'manage_options' ) ) {
-				$this->log_debug( "Skipping vendor product creation for admin user: {$vendor_id}" );
-				return false;
 			}
 
 			// Check if vendor is active
@@ -1226,12 +1230,6 @@ class Online_Texas_Core_Admin {
 
 		if ( ! empty( $vendors['users'] ) ) {
 			foreach ( $vendors['users'] as $vendor ) {
-				// Skip admin users - they shouldn't get vendor products for their own products
-				if ( user_can( $vendor->ID, 'manage_options' ) ) {
-					$this->log_debug( "Skipping admin user {$vendor->ID} from manual vendor sync" );
-					continue;
-				}
-
 				$created = $this->sync_single_vendor( $vendor->ID );
 				if ( $created !== false ) {
 					$total_created += $created;
@@ -1252,12 +1250,6 @@ class Online_Texas_Core_Admin {
 	public function sync_single_vendor( $vendor_id ) {
 		if ( ! function_exists( 'dokan_is_user_seller' ) || ! dokan_is_user_seller( $vendor_id ) ) {
 			return false;
-		}
-
-		// Skip admin users - they shouldn't get vendor products for their own products
-		if ( user_can( $vendor_id, 'manage_options' ) ) {
-			$this->log_debug( "Skipping admin user {$vendor_id} from vendor sync" );
-			return 0; // Return 0 instead of false to indicate successful skip
 		}
 
 		// Get all admin products with courses
@@ -1284,6 +1276,16 @@ class Online_Texas_Core_Admin {
 		foreach ( $admin_products as $admin_product_id ) {
 			// Skip if not an admin product
 			if ( ! $this->is_admin_product( $admin_product_id ) ) {
+				continue;
+			}
+
+			// Get the admin user ID who created the original product
+			$admin_product = get_post( $admin_product_id );
+			$admin_user_id = $admin_product ? $admin_product->post_author : 0;
+
+			// Skip if vendor is the admin who created this product
+			if ( $vendor_id == $admin_user_id ) {
+				$this->log_debug( "Skipping admin user {$vendor_id} (product author) from vendor sync for product {$admin_product_id}" );
 				continue;
 			}
 
