@@ -466,6 +466,12 @@ class Online_Texas_Core_Admin {
 			$store_info = function_exists( 'dokan_get_store_info' ) ? dokan_get_store_info( $vendor_id ) : array();
 			$store_name = ! empty( $store_info['store_name'] ) ? $store_info['store_name'] : $vendor->display_name;
 
+			// Get admin product price for initial setup
+			$admin_price = $admin_product->get_regular_price();
+			if ( empty( $admin_price ) ) {
+				$admin_price = $admin_product->get_price();
+			}
+
 			// Duplicate the product first
 			$duplicated_product = $this->duplicate_product( $admin_product );
 			if ( is_wp_error( $duplicated_product ) ) {
@@ -489,10 +495,12 @@ class Online_Texas_Core_Admin {
 				throw new Exception( 'Failed to update vendor product: ' . $update_result->get_error_message() );
 			}
 
-			// Clear pricing - let vendor set their own
-			$duplicated_product->set_regular_price( '' );
-			$duplicated_product->set_sale_price( '' );
-			$duplicated_product->save();
+			// Set initial price from admin product (vendor can change later)
+			if ( ! empty( $admin_price ) ) {
+				$duplicated_product->set_regular_price( $admin_price );
+				$duplicated_product->set_price( $admin_price );
+				$duplicated_product->save();
+			}
 
 			// Remove any copied course/group associations from admin product
 			delete_post_meta( $duplicated_product->get_id(), '_related_course' );
@@ -500,8 +508,8 @@ class Online_Texas_Core_Admin {
 			delete_post_meta( $duplicated_product->get_id(), 'learndash_course_enrolled_courses' );
 			delete_post_meta( $duplicated_product->get_id(), 'learndash_group_enrolled_groups' );
 
-			// Create LearnDash group with product ID for URL
-			$group_id = $this->create_learndash_group( $vendor_id, $course_ids, $vendor_product_title, $duplicated_product->get_id() );
+			// Create LearnDash group with product ID for URL and initial price
+			$group_id = $this->create_learndash_group( $vendor_id, $course_ids, $vendor_product_title, $duplicated_product->get_id(), $admin_price );
 			if ( ! $group_id ) {
 				// Clean up on failure
 				wp_delete_post( $duplicated_product->get_id(), true );
@@ -522,7 +530,7 @@ class Online_Texas_Core_Admin {
 				update_post_meta( $duplicated_product->get_id(), $key, $value );
 			}
 
-			$this->log_debug( "Created vendor product ID: {$duplicated_product->get_id()} for vendor: {$vendor_id} with closed group: {$group_id}" );
+			$this->log_debug( "Created vendor product ID: {$duplicated_product->get_id()} for vendor: {$vendor_id} with closed group: {$group_id} and initial price: {$admin_price}" );
 
 			return $duplicated_product->get_id();
 
@@ -613,9 +621,10 @@ class Online_Texas_Core_Admin {
 	 * @param array  $course_ids          Array of course IDs.
 	 * @param string $vendor_product_title The vendor product title.
 	 * @param int    $vendor_product_id   The vendor product ID.
+	 * @param string $initial_price       The initial price from admin product.
 	 * @return int|false The created group ID or false on failure.
 	 */
-	private function create_learndash_group( $vendor_id, $course_ids, $vendor_product_title, $vendor_product_id = null ) {
+	private function create_learndash_group( $vendor_id, $course_ids, $vendor_product_title, $vendor_product_id = null, $initial_price = '' ) {
 		if ( ! function_exists( 'learndash_get_post_type_slug' ) ) {
 			$this->log_debug( 'LearnDash functions not available', 'error' );
 			return false;
@@ -658,14 +667,13 @@ class Online_Texas_Core_Admin {
 			$product_url = get_permalink( $vendor_product_id );
 		}
 
-		// Set up group as closed with product link
-		// Price starts empty - will be synced when vendor sets their product price
+		// Set up group as closed with product link and initial price
 		$groups_settings = array(
 			0 => '', // First element is empty
 			'groups_course_short_description' => '',
 			'groups_group_price_type' => 'closed',
 			'groups_custom_button_url' => $product_url,
-			'groups_group_price' => '', // Empty initially - vendor controls pricing
+			'groups_group_price' => $initial_price, // Use initial price from admin product
 			'groups_group_start_date' => '0',
 			'groups_group_end_date' => '0',
 			'groups_group_seats_limit' => 0,
@@ -710,7 +718,7 @@ class Online_Texas_Core_Admin {
 		// Set vendor as group leader
 		$this->set_group_leader( $group_id, $vendor_id );
 
-		$this->log_debug( "Successfully created closed LearnDash group ID: {$group_id} for vendor: {$vendor_id} with courses: " . implode( ',', $valid_courses ) . " and product URL: {$product_url}. Price empty - vendor will set pricing." );
+		$this->log_debug( "Successfully created closed LearnDash group ID: {$group_id} for vendor: {$vendor_id} with courses: " . implode( ',', $valid_courses ) . ", product URL: {$product_url}, and initial price: {$initial_price}" );
 
 		return intval( $group_id );
 	}
