@@ -1,114 +1,163 @@
-=== Plugin Name ===
-Contributors: (this should be a list of wordpress.org userid's)
-Donate link: https://https://wbcomdesigns.com//
-Tags: comments, spam
-Requires at least: 3.0.1
-Tested up to: 3.4
-Stable tag: 4.3
+=== Online Texas Core ===
+Contributors: wbcomdesigns
+Donate link: https://wbcomdesigns.com/
+Tags: woocommerce, dokan, learndash, vendor, products, courses, integration
+Requires at least: 5.0
+Tested up to: 6.3
+Requires PHP: 7.4
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
-Here is a short description of the plugin.  This should be no more than 150 characters.  No markup here.
+Automatically creates vendor products and LearnDash groups when admin creates products with course links. Seamlessly integrates WooCommerce, Dokan and LearnDash.
 
 == Description ==
 
-This is the long description.  No limit, and you can use Markdown (as well as in the following sections).
+Online Texas Core is a powerful integration plugin that bridges WooCommerce, Dokan, and LearnDash to create a seamless vendor-based learning marketplace. When an admin creates a product and links it to LearnDash courses, the plugin automatically:
 
-For backwards compatibility, if this section is missing, the full length of the short description will be used, and
-Markdown parsed.
+* **Creates duplicate products for all active vendors** with the format "Store Name - Product Name"
+* **Generates individual LearnDash groups** for each vendor product
+* **Links courses to vendor groups** and assigns vendors as group leaders
+* **Maintains synchronization** between admin and vendor products
+* **Preserves vendor pricing independence** while syncing product details
 
-A few notes about the sections above:
+= Key Features =
 
-*   "Contributors" is a comma separated list of wp.org/wp-plugins.org usernames
-*   "Tags" is a comma separated list of tags that apply to the plugin
-*   "Requires at least" is the lowest version that the plugin will work on
-*   "Tested up to" is the highest version that you've *successfully used to test the plugin*. Note that it might work on
-higher versions... this is just the highest one you've verified.
-*   Stable tag should indicate the Subversion "tag" of the latest stable version, or "trunk," if you use `/trunk/` for
-stable.
+* **Automatic Product Creation**: When admin creates products with course links, vendor versions are automatically generated
+* **Smart Synchronization**: Updates to admin products sync to vendor products (description only for published vendor products)
+* **LearnDash Integration**: Each vendor gets their own groups linked to the same courses as the original product
+* **Vendor Independence**: Vendors can set their own pricing and publish when ready
+* **Role-Based Detection**: Automatically creates products when users become vendors through any method
+* **Manual Sync Tools**: Admin tools for manual synchronization and bulk operations
+* **Debug Logging**: Comprehensive logging system for troubleshooting
+* **Production Ready**: Built with security, performance, and scalability in mind
 
-    Note that the `readme.txt` of the stable tag is the one that is considered the defining one for the plugin, so
-if the `/trunk/readme.txt` file says that the stable tag is `4.3`, then it is `/tags/4.3/readme.txt` that'll be used
-for displaying information about the plugin.  In this situation, the only thing considered from the trunk `readme.txt`
-is the stable tag pointer.  Thus, if you develop in trunk, you can update the trunk `readme.txt` to reflect changes in
-your in-development version, without having that information incorrectly disclosed about the current stable version
-that lacks those changes -- as long as the trunk's `readme.txt` points to the correct stable tag.
+= How It Works =
 
-    If no stable tag is provided, it is assumed that trunk is stable, but you should specify "trunk" if that's where
-you put the stable version, in order to eliminate any doubt.
+1. **Admin Creates Product**: Admin creates a WooCommerce product and links it to LearnDash courses or groups
+2. **Automatic Duplication**: Plugin creates copies for all active vendors with vendor store name prefix
+3. **LearnDash Groups**: Each vendor product gets its own LearnDash group linked to the same courses
+4. **Vendor Customization**: Vendors can customize pricing and publish when ready
+5. **Ongoing Sync**: Updates to admin products automatically sync to vendor products
+
+= Requirements =
+
+* WordPress 5.0 or higher
+* PHP 7.4 or higher
+* WooCommerce 5.0 or higher
+* Dokan 3.0 or higher
+* LearnDash 3.0 or higher
+
+= Pro Features =
+
+This is the core version. Contact Wbcom Designs for custom features and enterprise support.
 
 == Installation ==
 
-This section describes how to install the plugin and get it working.
+1. Upload the plugin files to the `/wp-content/plugins/online-texas-core` directory, or install the plugin through the WordPress plugins screen directly.
+2. Activate the plugin through the 'Plugins' screen in WordPress
+3. Ensure WooCommerce, Dokan, and LearnDash are installed and activated
+4. Navigate to Dokan > Texas Core to view the dashboard
+5. Configure settings under Settings > Texas Core
 
-e.g.
+= Automatic Installation =
 
-1. Upload `online-texas-core.php` to the `/wp-content/plugins/` directory
-1. Activate the plugin through the 'Plugins' menu in WordPress
-1. Place `<?php do_action('plugin_name_hook'); ?>` in your templates
+1. Go to your WordPress admin area and navigate to Plugins > Add New
+2. Search for "Online Texas Core"
+3. Click "Install Now" and then "Activate"
 
 == Frequently Asked Questions ==
 
-= A question that someone might have =
+= What happens when I create a product with course links? =
 
-An answer to that question.
+The plugin automatically creates duplicate products for all active vendors in your marketplace. Each vendor product gets its own LearnDash group linked to the same courses as your original product.
 
-= What about foo bar? =
+= Can vendors set their own pricing? =
 
-Answer to foo bar dilemma.
+Yes! Vendor products are created as drafts with empty pricing, allowing vendors to set their own prices before publishing.
+
+= What happens when I update an admin product? =
+
+For draft vendor products: Full synchronization of all product details except pricing.
+For published vendor products: Only the product description is updated to preserve vendor customizations.
+
+= What if a vendor is added after I create products? =
+
+New vendors automatically get products created for all existing admin products with course links. You can also manually sync specific vendors from the admin panel.
+
+= Can I disable automatic product creation? =
+
+Yes, you can disable automatic creation in Settings > Texas Core. You can then use the manual sync tools when needed.
+
+= What happens to LearnDash groups when vendor products are created? =
+
+Each vendor product gets its own LearnDash group that's linked to the same courses as the original admin product. The vendor is automatically set as the group leader.
+
+= Is this plugin compatible with Dokan Pro? =
+
+Yes, the plugin works with both Dokan Lite and Dokan Pro versions.
+
+= How do I troubleshoot issues? =
+
+Enable debug mode in Settings > Texas Core to see detailed logs. Check the main plugin dashboard for recent activity and system status.
 
 == Screenshots ==
 
-1. This screen shot description corresponds to screenshot-1.(png|jpg|jpeg|gif). Note that the screenshot is taken from
-the /assets directory or the directory that contains the stable readme.txt (tags or trunk). Screenshots in the /assets
-directory take precedence. For example, `/assets/screenshot-1.png` would win over `/tags/4.3/screenshot-1.png`
-(or jpg, jpeg, gif).
-2. This is the second screen shot
+1. Plugin dashboard showing statistics and quick actions
+2. Settings page with configuration options
+3. Product list showing linked courses and vendor information
+4. Manual vendor sync interface
+5. Debug log showing plugin activity
 
 == Changelog ==
 
-= 1.0 =
-* A change since the previous version.
-* Another change.
+= 1.1.0 =
+* Added comprehensive vendor lifecycle management
+* Improved synchronization logic for published vs draft products
+* Enhanced admin dashboard with statistics and manual sync tools
+* Added proper error handling and debugging capabilities
+* Implemented security improvements and input validation
+* Added production-ready logging system
+* Improved performance with caching and optimization
+* Enhanced documentation and code structure
 
-= 0.5 =
-* List versions from most recent at top to oldest at bottom.
+= 1.0.0 =
+* Initial release
+* Basic product duplication functionality
+* LearnDash group creation
+* Simple admin interface
 
 == Upgrade Notice ==
 
-= 1.0 =
-Upgrade notices describe the reason a user should upgrade.  No more than 300 characters.
+= 1.1.0 =
+This update includes significant improvements to performance, security, and functionality. Backup your site before upgrading. New features include enhanced sync logic, better debugging tools, and improved admin interface.
 
-= 0.5 =
-This version fixes a security related bug.  Upgrade immediately.
+= 1.0.0 =
+Initial release of the plugin.
 
-== Arbitrary section ==
+== Developer Notes ==
 
-You may provide arbitrary sections, in the same format as the ones above.  This may be of use for extremely complicated
-plugins where more information needs to be conveyed that doesn't fit into the categories of "description" or
-"installation."  Arbitrary sections will be shown below the built-in sections outlined above.
+= Hooks and Filters =
 
-== A brief Markdown Example ==
+The plugin provides several hooks for developers:
 
-Ordered list:
+* `otc_before_vendor_product_created` - Fired before a vendor product is created
+* `otc_after_vendor_product_created` - Fired after a vendor product is created
+* `otc_vendor_product_sync_fields` - Filter the fields that are synced between admin and vendor products
 
-1. Some feature
-1. Another feature
-1. Something else about the plugin
+= Custom Integration =
 
-Unordered list:
+For custom integrations or modifications, please contact Wbcom Designs for professional development services.
 
-* something
-* something else
-* third thing
+= Contributing =
 
-Here's a link to [WordPress](http://wordpress.org/ "Your favorite software") and one to [Markdown's Syntax Documentation][markdown syntax].
-Titles are optional, naturally.
+This plugin is developed by Wbcom Designs. For feature requests or bug reports, please contact our support team.
 
-[markdown syntax]: http://daringfireball.net/projects/markdown/syntax
-            "Markdown is what the parser uses to process much of the readme file"
+== Support ==
 
-Markdown uses email style notation for blockquotes and I've been told:
-> Asterisks for *emphasis*. Double it up  for **strong**.
+For support, feature requests, or custom development:
 
-`<?php code(); // goes in backticks ?>`
+* Visit: https://wbcomdesigns.com/
+* Email: admin@wbcomdesigns.com
+
+Professional support and custom development services available.

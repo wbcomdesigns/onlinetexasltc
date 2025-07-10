@@ -1,9 +1,8 @@
 <?php
-
 /**
  * The public-facing functionality of the plugin.
  *
- * @link       https://https://wbcomdesigns.com/
+ * @link       https://wbcomdesigns.com/
  * @since      1.0.0
  *
  * @package    Online_Texas_Core
@@ -18,7 +17,7 @@
  *
  * @package    Online_Texas_Core
  * @subpackage Online_Texas_Core/public
- * @author     Wbcom <admin@wbcomdesigns.com>
+ * @author     Wbcom Designs <admin@wbcomdesigns.com>
  */
 class Online_Texas_Core_Public {
 
@@ -44,14 +43,12 @@ class Online_Texas_Core_Public {
 	 * Initialize the class and set its properties.
 	 *
 	 * @since    1.0.0
-	 * @param      string    $plugin_name       The name of the plugin.
-	 * @param      string    $version    The version of this plugin.
+	 * @param    string    $plugin_name       The name of the plugin.
+	 * @param    string    $version    The version of this plugin.
 	 */
 	public function __construct( $plugin_name, $version ) {
-
 		$this->plugin_name = $plugin_name;
 		$this->version = $version;
-
 	}
 
 	/**
@@ -60,7 +57,6 @@ class Online_Texas_Core_Public {
 	 * @since    1.0.0
 	 */
 	public function enqueue_styles() {
-
 		/**
 		 * This function is provided for demonstration purposes only.
 		 *
@@ -73,8 +69,13 @@ class Online_Texas_Core_Public {
 		 * class.
 		 */
 
-		wp_enqueue_style( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'css/online-texas-core-public.css', array(), $this->version, 'all' );
-
+		wp_enqueue_style( 
+			$this->plugin_name, 
+			ONLINE_TEXAS_CORE_URL . 'public/css/online-texas-core-public.css', 
+			array(), 
+			$this->version, 
+			'all' 
+		);
 	}
 
 	/**
@@ -83,7 +84,6 @@ class Online_Texas_Core_Public {
 	 * @since    1.0.0
 	 */
 	public function enqueue_scripts() {
-
 		/**
 		 * This function is provided for demonstration purposes only.
 		 *
@@ -96,8 +96,12 @@ class Online_Texas_Core_Public {
 		 * class.
 		 */
 
-		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/online-texas-core-public.js', array( 'jquery' ), $this->version, false );
-
+		wp_enqueue_script( 
+			$this->plugin_name, 
+			ONLINE_TEXAS_CORE_URL . 'public/js/online-texas-core-public.js', 
+			array( 'jquery' ), 
+			$this->version, 
+			false 
+		);
 	}
-
 }

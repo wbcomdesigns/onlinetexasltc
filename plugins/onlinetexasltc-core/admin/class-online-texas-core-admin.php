@@ -1,9 +1,8 @@
 <?php
-
 /**
  * The admin-specific functionality of the plugin.
  *
- * @link       https://https://wbcomdesigns.com/
+ * @link       https://wbcomdesigns.com/
  * @since      1.0.0
  *
  * @package    Online_Texas_Core
@@ -13,12 +12,12 @@
 /**
  * The admin-specific functionality of the plugin.
  *
- * Defines the plugin name, version, and two examples hooks for how to
- * enqueue the admin-specific stylesheet and JavaScript.
+ * Defines the plugin name, version, and hooks for admin area functionality
+ * including product management, vendor synchronization, and admin interface.
  *
  * @package    Online_Texas_Core
  * @subpackage Online_Texas_Core/admin
- * @author     Wbcom <admin@wbcomdesigns.com>
+ * @author     Wbcom Designs <admin@wbcomdesigns.com>
  */
 class Online_Texas_Core_Admin {
 
@@ -44,712 +43,940 @@ class Online_Texas_Core_Admin {
 	 * Initialize the class and set its properties.
 	 *
 	 * @since    1.0.0
-	 * @param      string    $plugin_name       The name of this plugin.
-	 * @param      string    $version    The version of this plugin.
+	 * @param    string    $plugin_name       The name of this plugin.
+	 * @param    string    $version    The version of this plugin.
 	 */
 	public function __construct( $plugin_name, $version ) {
-
 		$this->plugin_name = $plugin_name;
 		$this->version = $version;
-
 	}
 
 	/**
 	 * Register the stylesheets for the admin area.
 	 *
 	 * @since    1.0.0
+	 * @param    string    $hook    The current admin page hook.
 	 */
-	public function enqueue_styles() {
-
-		/**
-		 * This function is provided for demonstration purposes only.
-		 *
-		 * An instance of this class should be passed to the run() function
-		 * defined in Online_Texas_Core_Loader as all of the hooks are defined
-		 * in that particular class.
-		 *
-		 * The Online_Texas_Core_Loader will then create the relationship
-		 * between the defined hooks and the functions defined in this
-		 * class.
-		 */
-
-		wp_enqueue_style( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'css/online-texas-core-admin.css', array(), $this->version, 'all' );
-
+	public function enqueue_styles( $hook ) {
+		wp_enqueue_style( 
+			$this->plugin_name, 
+			ONLINE_TEXAS_CORE_URL . 'admin/css/online-texas-core-admin.css', 
+			array(), 
+			$this->version, 
+			'all' 
+		);
 	}
 
 	/**
 	 * Register the JavaScript for the admin area.
 	 *
 	 * @since    1.0.0
+	 * @param    string    $hook    The current admin page hook.
 	 */
-	public function enqueue_scripts($hook) {
+	public function enqueue_scripts( $hook ) {
+		wp_enqueue_script( 
+			$this->plugin_name, 
+			ONLINE_TEXAS_CORE_URL . 'admin/js/online-texas-core-admin.js', 
+			array( 'jquery' ), 
+			$this->version, 
+			false 
+		);
 
-		/**
-		 * This function is provided for demonstration purposes only.
-		 *
-		 * An instance of this class should be passed to the run() function
-		 * defined in Online_Texas_Core_Loader as all of the hooks are defined
-		 * in that particular class.
-		 *
-		 * The Online_Texas_Core_Loader will then create the relationship
-		 * between the defined hooks and the functions defined in this
-		 * class.
-		 */
-		if ($hook === 'product_page_course-product-manager') {
-            wp_enqueue_script('jquery');
-        }
-		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/online-texas-core-admin.js', array( 'jquery' ), $this->version, false );
-
+		// Localize script for AJAX
+		wp_localize_script( $this->plugin_name, 'otc_ajax', array(
+			'ajax_url' => admin_url( 'admin-ajax.php' ),
+			'nonce' => wp_create_nonce( 'otc_nonce' ),
+			'strings' => array(
+				'syncing' => esc_html__( 'Syncing...', 'online-texas-core' ),
+				'sync_success' => esc_html__( 'Sync completed successfully', 'online-texas-core' ),
+				'sync_error' => esc_html__( 'Sync failed. Please try again.', 'online-texas-core' ),
+				'confirm_clear_log' => esc_html__( 'Are you sure you want to clear the debug log?', 'online-texas-core' )
+			)
+		));
 	}
 
-    /**
-     * Using WooCommerce function (if WooCommerce is active)
-     */
-    private function is_wc_product_id($post_id) {
-        if (function_exists('wc_get_product')) {
-            $product = wc_get_product($post_id);
-            return $product !== false;
-        }
-        return false;
-    }
+	/**
+	 * Check if a post ID corresponds to a WooCommerce product.
+	 *
+	 * @since 1.0.0
+	 * @param int $post_id The post ID to check.
+	 * @return bool True if it's a WooCommerce product, false otherwise.
+	 */
+	private function is_wc_product( $post_id ) {
+		$product = wc_get_product( $post_id );
+		return $product !== false;
+	}
 
-    private function fetch_course_from_product( $post_id ){
-         // Check if course is linked
-        $linked_course = ( get_post_meta($post_id, '_related_course', true) ) ? get_post_meta($post_id, '_related_course', true) : array();
+	/**
+	 * Fetch courses linked to a product (direct courses or via groups).
+	 *
+	 * @since 1.0.0
+	 * @param int $post_id The product ID.
+	 * @return array Array of course IDs.
+	 */
+	private function fetch_course_from_product( $post_id ) {
+		$linked_course = get_post_meta( $post_id, '_related_course', true );
+		if ( ! is_array( $linked_course ) ) {
+			$linked_course = ! empty( $linked_course ) ? array( $linked_course ) : array();
+		}
 
-        $linked_groups = get_post_meta($post_id, '_related_group', true);
-        // Process linked groups and get their courses
-        if (!empty($linked_groups) && is_array($linked_groups)) {
-            foreach ($linked_groups as $key => $group_id) {
-                // Get courses enrolled in this LearnDash group
-                $group_courses = learndash_group_enrolled_courses($group_id);
-                
-                // If group has courses, add them to linked_course array
-                if (!empty($group_courses)) {
-                    if (is_array($group_courses)) {
-                        $linked_course = array_merge($linked_course, $group_courses);
-                    } else {
-                        $linked_course[] = $group_courses;
-                    }
-                }
-            }
-            
-            // Remove duplicates and empty values
-            $linked_course = array_unique(array_filter($linked_course));
-        }
+		$linked_groups = get_post_meta( $post_id, '_related_group', true );
+		
+		if ( ! empty( $linked_groups ) && is_array( $linked_groups ) ) {
+			foreach ( $linked_groups as $group_id ) {
+				$group_courses = learndash_group_enrolled_courses( $group_id );
+				
+				if ( ! empty( $group_courses ) ) {
+					if ( is_array( $group_courses ) ) {
+						$linked_course = array_merge( $linked_course, $group_courses );
+					} else {
+						$linked_course[] = $group_courses;
+					}
+				}
+			}
+			
+			$linked_course = array_unique( array_filter( $linked_course ) );
+		}
 
-        return $linked_course;
-    }
+		return array_map( 'intval', $linked_course );
+	}
 
-    /**
-     * Handle product save - create vendor products
-     */
-    public function online_texas_handle_product_save($post_id, $post) {
-        // Skip if this is an autosave or revision
-        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
-            return;
-        }
-        if( ! $this->is_wc_product_id( $post_id ) ){
-            return;
-        }
-        // Skip if this is a revision
-        if (wp_is_post_revision($post_id)) {
-            return;
-        }
-        // Only proceed for admin-created products
-        if (!$this->online_texas_is_admin_product($post_id)) {
-            return;
-        }
-        
-        // Check if course is linked
-       $linked_course = $this->fetch_course_from_product( $post_id );
+	/**
+	 * Handle product save and trigger vendor product synchronization.
+	 *
+	 * @since 1.0.0
+	 * @param int     $post_id The post ID being saved.
+	 * @param WP_Post $post    The post object being saved.
+	 */
+	public function save_product( $post_id, $post ) {
+		// Skip if this is an autosave or revision
+		if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+			return;
+		}
 
-        if (!$linked_course) {
-            return;
-        }
-         
-        if ($post->post_status == 'publish') {
-            // Check if we've already processed this product
-            $already_processed = get_post_meta($post_id, '_dli_vendor_products_created', true);
+		if ( wp_is_post_revision( $post_id ) ) {
+			return;
+		}
 
-            if (!$already_processed) {
-                $this->online_texas_create_vendor_products($post_id, $linked_course);
-                update_post_meta($post_id, '_dli_vendor_products_created', time());
-            }else{
-                 $this->online_texas_sync_vendor_products($post_id, $post);
-            }
-        }
-    }
-    
-    /**
-     * Check if product is created by admin (not vendor)
-     */
-    private function online_texas_is_admin_product($product_id) {
-        // Check if product has parent_product_id (vendor product)
-        $parent_id = get_post_meta($product_id, '_parent_product_id', true);
-        if ($parent_id) {
-            return false;
-        }
-        
-        // Check if author is admin
-        $product = get_post($product_id);
-        $author = get_user_by('ID', $product->post_author);
-        
-        return user_can($author, 'manage_options');
-    }
-    
-    /**
-     * Create vendor products for all active vendors
-     */
-    private function online_texas_create_vendor_products($admin_product_id, $course_ids) {
-        // Get all active vendors
-        $vendors = dokan_get_sellers();
-        
-        foreach ($vendors['users'] as $vendor) {
-            // Check if vendor product already exists
-            $existing_product = $this->online_texas_get_vendor_product($admin_product_id, $vendor->ID);
-            if ($existing_product) {
-                continue;
-            }
-            
-            $this->online_texas_create_single_vendor_product($admin_product_id, $vendor->ID, $course_ids);
-        }
-    }
-    
-    /**
-     * Create a single vendor product
-     */
-    private function online_texas_create_single_vendor_product($admin_product_id, $vendor_id, $course_ids) {
-        $admin_product = wc_get_product($admin_product_id);
-        
-        if (!$admin_product) {
-            return false;
-        }
-        
-        // Get vendor info
-        $vendor = get_user_by('ID', $vendor_id);
-        $store_info = dokan_get_store_info($vendor_id);
-        $store_name = isset($store_info['store_name']) ? $store_info['store_name'] : $vendor->display_name;
-        
-        // Duplicate the product using WooCommerce native function
-        $duplicated_product = $this->online_texas_duplicate_product($admin_product_id);
-        if (is_wp_error($duplicated_product)) {
-            $this->online_texas_log_error('Failed to duplicate product: ' . $duplicated_product->get_error_message());
-            return false;
-        }
-        
-        // Update the duplicated product
-        $vendor_product_title = $store_name . ' - ' . $admin_product->get_name();
-        
-        wp_update_post(array(
-            'ID' => $duplicated_product->get_id(),
-            'post_title' => $vendor_product_title,
-            'post_name' => sanitize_title($vendor_product_title),
-            'post_status' => 'draft',
-            'post_author' => $vendor_id
-        ));
-        
-        // Clear pricing to make it editable by vendor
-        $duplicated_product->set_regular_price('');
-        $duplicated_product->set_sale_price('');
-        $duplicated_product->save();
-        
-        // Create LearnDash group
-        $group_id = $this->online_texas_create_learndash_group($vendor_id, $course_ids, $vendor_product_title);
-        
-        // Save metadata
-        update_post_meta($duplicated_product->get_id(), '_parent_product_id', $admin_product_id);
-        update_post_meta($duplicated_product->get_id(), '_linked_ld_group_id', $group_id);
-        update_post_meta($duplicated_product->get_id(), '_vendor_product_original_title', $admin_product->get_name());
-        update_post_meta($duplicated_product->get_id(), '_cloned_on', current_time('mysql'));
-        
-        // Link product to LearnDash group
-        if ($group_id) {
-            update_post_meta($duplicated_product->get_id(), 'learndash_group_enrolled_groups', array($group_id));
-        }
-        
-        $this->online_texas_debug_log("Created vendor product ID: {$duplicated_product->get_id()} for vendor: {$vendor_id}");
-        
-        return $duplicated_product->get_id();
-    }
-    
-    /**
-     * Duplicate product using WooCommerce native function
-     */
-    private function online_texas_duplicate_product($product_id) {
-        $product = wc_get_product($product_id);
-        if (!$product) {
-            return new WP_Error('invalid_product', 'Invalid product ID');
-        }
-        
-        // Use WooCommerce duplicate functionality
-        if (class_exists('WC_Admin_Duplicate_Product')) {
-            $duplicate_handler = new WC_Admin_Duplicate_Product();
-            $duplicated_product = $duplicate_handler->product_duplicate($product);
-            return $duplicated_product;
-        } else {
-            // Fallback manual duplication
-            return $this->online_texas_manual_product_duplicate($product);
-        }
-    }
-    
-    /**
-     * Manual product duplication fallback
-     */
-    private function online_texas_manual_product_duplicate($original_product) {
-        $duplicate_data = array(
-            'post_title' => $original_product->get_name(),
-            'post_content' => $original_product->get_description(),
-            'post_excerpt' => $original_product->get_short_description(),
-            'post_status' => 'draft',
-            'post_type' => 'product',
-            'ping_status' => 'closed',
-            'comment_status' => 'closed'
-        );
-        
-        $duplicate_id = wp_insert_post($duplicate_data);
-        
-        if (is_wp_error($duplicate_id)) {
-            return $duplicate_id;
-        }
-        
-        // Copy product meta
-        $meta_keys = get_post_meta($original_product->get_id());
-        foreach ($meta_keys as $key => $values) {
-            foreach ($values as $value) {
-                add_post_meta($duplicate_id, $key, maybe_unserialize($value));
-            }
-        }
-        
-        return wc_get_product($duplicate_id);
-    }
-    
-    /**
-     * Handle new vendor creation
-     */
-    public function online_texas_handle_new_vendor($user_id, $dokan_settings) {
-        $this->online_texas_create_products_for_new_vendor($user_id);
-    }
-    
-    /**
-     * Handle vendor being enabled/activated
-     */
-    public function online_texas_handle_vendor_enabled($seller_id) {
-        $this->online_texas_create_products_for_new_vendor($seller_id);
-    }
-    
-    /**
-     * Create products for a new vendor from all existing admin products
-     */
-    private function online_texas_create_products_for_new_vendor($vendor_id) {
-        // Get all admin products with linked courses
-        $admin_products = get_posts(array(
-            'post_type' => 'product',
-            'meta_query' => array(
-                array(
-                    'key' => '_related_course',
-                    'compare' => 'EXISTS'
-                )
-            ),
-            'posts_per_page' => -1
-        ));
-        
-        foreach ($admin_products as $admin_product) {
-            // Check if this vendor already has a product for this admin product
-            $existing_product = $this->online_texas_get_vendor_product($admin_product->ID, $vendor_id);
-            if ($existing_product) {
-                continue; // Skip if already exists
-            }
-            
-            // Check if admin product author is actually an admin
-            if (!$this->online_texas_is_admin_product($admin_product->ID)) {
-                continue;
-            }
-            
-            $course_ids = get_post_meta($admin_product->ID, '_related_course', true);
-            if ($course_ids) {
-                $this->online_texas_create_single_vendor_product($admin_product->ID, $vendor_id, $course_ids);
-            }
-        }
-        
-        $this->online_texas_debug_log("Created products for new vendor ID: {$vendor_id}");
-    }
-    
-    /**
-     * Sync all vendors with existing admin products
-     */
-    private function online_texas_sync_all_new_vendors() {
-        $vendors = dokan_get_sellers();
-        
-        foreach ($vendors['users'] as $vendor) {
-            $this->online_texas_create_products_for_new_vendor($vendor->ID);
-        }
-        
-        $this->online_texas_debug_log("Synced products for all vendors");
-    }
-    
-    private function online_texas_create_learndash_group($vendor_id, $course_ids, $vendor_product_title) {
-        $course = get_post($course_ids);
-        if (!$course) {
-            return false;
-        }
-        
-        $group_title = $vendor_product_title;
-        
-        // Create LearnDash group
-        $group_data = array(
-            'post_title' => $group_title,
-            'post_type' => 'groups',
-            'post_status' => 'publish',
-            'post_author' => $vendor_id
-        );
-        
-        $group_id = wp_insert_post($group_data);
-        
-        if (is_wp_error($group_id)) {
-            $this->online_texas_log_error('Failed to create LearnDash group: ' . $group_id->get_error_message());
-            return false;
-        }
-        
-        // Link group to course
-        $course_list = $course_ids;
-        learndash_set_group_enrolled_courses($group_id, $course_list);
-        
-        // Set vendor as group leader
-        $this->online_texas_set_group_leader($group_id, $vendor_id);
-        
-        $this->online_texas_debug_log("Created LearnDash group ID: {$group_id} for vendor: {$vendor_id}");
-        
-        return $group_id;
-    }
-    
-    /**
-     * Get existing vendor product
-     */
-    private function online_texas_get_vendor_product($admin_product_id, $vendor_id) {
-        $args = array(
-            'post_type' => 'product',
-            'author' => $vendor_id,
-            'meta_query' => array(
-                array(
-                    'key' => '_parent_product_id',
-                    'value' => $admin_product_id,
-                    'compare' => '='
-                )
-            ),
-            'posts_per_page' => 1
-        );
-        
-        $products = get_posts($args);
-        return !empty($products) ? $products[0] : false;
-    }
-    
-    /**
-     * Sync vendor products when admin product is updated
-     */
-    public function online_texas_sync_vendor_products($post_id, $post) {
-        
-         // Skip if this is an autosave or revision
-        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
-            return;
-        }
-        
-        if (wp_is_post_revision($post_id)) {
-            return;
-        }
+		// Only process WooCommerce products
+		if ( ! $this->is_wc_product( $post_id ) ) {
+			return;
+		}
 
-        if (!$this->online_texas_is_admin_product($post_id)) {
-            return;
-        }
-    
-        $this->online_texas_sync_all_vendor_products($post_id);
+		// Only proceed for admin-created products
+		if ( ! $this->is_admin_product( $post_id ) ) {
+			return;
+		}
 
-    }
-    
-    /**
-     * Sync all vendor products for an admin product
-     */
-    private function online_texas_sync_all_vendor_products($admin_product_id) {
-        // Get all vendor products
-        $vendor_products = get_posts(array(
-            'post_type' => 'product',
-            'post_status' => 'any',
-            'meta_query' => array(
-                array(
-                    'key' => '_parent_product_id',
-                    'value' => $admin_product_id,
-                    'compare' => '='
-                )
-            ),
-            'posts_per_page' => -1
-        ));
-        
-        $admin_product = wc_get_product($admin_product_id);
-        if (!$admin_product) {
-            return;
-        }
-            
-        foreach ($vendor_products as $vendor_product_post) {
-            $this->online_texas_sync_single_vendor_product($vendor_product_post->ID, $admin_product);
-        }
-    }
-    
-    /**
-     * Sync a single vendor product
-     */
-    private function online_texas_sync_single_vendor_product($vendor_product_id, $admin_product) {
-        $vendor_product = wc_get_product($vendor_product_id);
+		// Check if product has linked courses
+		$linked_courses = $this->fetch_course_from_product( $post_id );
+		if ( empty( $linked_courses ) ) {
+			return;
+		}
 
-        if (!$vendor_product || ! $admin_product instanceof WC_Product) {
-            return;
-        }
+		// Only process published products
+		if ( $post->post_status !== 'publish' ) {
+			return;
+		}
 
-        // Fields you do NOT want to sync
-        $excluded_fields = array(
-            'name', 'regular_price', 'sale_price', 'price', 'date_on_sale_from',
-            'date_on_sale_to', 'total_sales', 'id', 'parent_id', 'sku',
-            '_related_course', // custom meta
-        );
+		$this->log_debug( "Processing product save for ID: {$post_id}" );
 
-        // Get all available setter methods from WC_Product
-        $vendor_methods = get_class_methods($vendor_product);
-        foreach ($vendor_methods as $method) {
-            if (strpos($method, 'set_') === 0) {
-                $field = substr($method, 4); // get field name after 'set_'
-                if (in_array($field, $excluded_fields, true)) {
-                    continue;
-                }
+		// Check if we've already processed this product
+		$already_processed = get_post_meta( $post_id, '_otc_vendor_products_created', true );
 
-                $getter = "get_{$field}";
-                if (method_exists($admin_product, $getter)) {
-                    $value = $admin_product->$getter();
+		if ( ! $already_processed ) {
+			// First time - create vendor products
+			$this->create_vendor_products( $post_id, $linked_courses );
+			update_post_meta( $post_id, '_otc_vendor_products_created', current_time( 'mysql' ) );
+		} else {
+			// Update existing vendor products
+			$this->sync_vendor_products( $post_id );
+		}
+	}
 
-                    // Sync the value
-                    $vendor_product->$method($value);
-                }
-            }
-        }
+	/**
+	 * Check if a product was created by an admin user.
+	 *
+	 * @since 1.0.0
+	 * @param int $product_id The product ID to check.
+	 * @return bool True if created by admin, false otherwise.
+	 */
+	private function is_admin_product( $product_id ) {
+		// Check if product has parent_product_id (indicates it's a vendor product)
+		$parent_id = get_post_meta( $product_id, '_parent_product_id', true );
+		if ( $parent_id ) {
+			return false;
+		}
 
-        // Sync course association (custom logic)
-        $admin_courses = get_post_meta($admin_product->get_id(), '_related_course', true);
-        if ($admin_courses) {
-            $this->online_texas_update_vendor_course_association($vendor_product_id, $admin_courses);
-        }
+		// Check if author has admin capabilities
+		$product = get_post( $product_id );
+		if ( ! $product ) {
+			return false;
+		}
 
-        // Save synced product
-        $vendor_product->save();
+		$author = get_user_by( 'ID', $product->post_author );
+		if ( ! $author ) {
+			return false;
+		}
 
-        $this->online_texas_debug_log("Synced vendor product ID: {$vendor_product_id}");
-    }
-    
-    /**
-     * Update vendor course association
-     */
-    private function online_texas_update_vendor_course_association($vendor_product_id, $new_course_ids) {
-        $group_id = get_post_meta($vendor_product_id, '_linked_ld_group_id', true);
-        if ($group_id) {
-            // Update group course association
-            $course_list = $new_course_ids;
-            learndash_set_group_enrolled_courses($group_id, $course_list);
-        }
-    }
-    
-    /**
-     * Add admin menu
-     */
-    public function add_admin_menu() {
-        add_submenu_page(
-            'dokan',
-            'LearnDash Integration',
-            'LearnDash Integration',
-            'manage_options',
-            'dokan-learndash-integration',
-            array($this, 'online_texas_admin_page')
-        );
-    }
-    
-    /**
-     * Admin page
-     */
-    public function online_texas_admin_page() {
-        ?>
-        <div class="wrap">
-            <h1>Dokan LearnDash Integration</h1>
-            <h2>Debug Information</h2>
-            
-            <?php
-            // Show statistics
-            $admin_products = get_posts(array(
-                'post_type' => 'product',
-                'meta_query' => array(
-                    array(
-                        'key' => '_related_course',
-                        'compare' => 'EXISTS'
-                    )
-                ),
-                'posts_per_page' => -1
-            ));
-            
-            $vendor_products = get_posts(array(
-                'post_type' => 'product',
-                'meta_query' => array(
-                    array(
-                        'key' => '_parent_product_id',
-                        'compare' => 'EXISTS'
-                    )
-                ),
-                'posts_per_page' => -1
-            ));
-            
-            $groups = get_posts(array(
-                'post_type' => 'groups',
-                'posts_per_page' => -1
-            ));
-            ?>
-            
-            <div class="notice notice-info">
-                <p><strong>Statistics:</strong></p>
-                <ul>
-                    <li>Admin Products with LearnDash Courses: <?php echo count($admin_products); ?></li>
-                    <li>Vendor Products Generated: <?php echo count($vendor_products); ?></li>
-                    <li>LearnDash Groups: <?php echo count($groups); ?></li>
-                </ul>
-            </div>
-            
-            <h3>Recent Activity</h3>
-            <div id="debug-log">
-                <?php $this->online_texas_show_debug_log(); ?>
-            </div>
-        </div>
-        <?php
-    }
-    
-    private function online_texas_log_error($message) {
-        $log = get_option('dli_debug_log', array());
-        $log[] = array(
-            'timestamp' => current_time('mysql'),
-            'message' => $message,
-            'type' => 'error'
-        );
-        
-        // Keep only last 50 entries
-        if (count($log) > 50) {
-            $log = array_slice($log, -50);
-        }
-        
-        update_option('dli_debug_log', $log);
-    }
-    
-    private function online_texas_show_debug_log() {
-        $log = get_option('dli_debug_log', array());
-        if (empty($log)) {
-            echo '<p>No debug information available.</p>';
-            return;
-        }
-        
-        echo '<ul>';
-        foreach (array_reverse($log) as $entry) {
-            $class = $entry['type'] == 'error' ? 'error' : 'info';
-            echo '<li class="' . $class . '">';
-            echo '<strong>' . $entry['timestamp'] . ':</strong> ' . esc_html($entry['message']);
-            echo '</li>';
-        }
-        echo '</ul>';
-    }
-    
-    /**
-     * Debug info in footer for admins
-     */
-    public function online_texas_debug_info() {
-        if (!current_user_can('manage_options')) {
-            return;
-        }
-        
-        if (is_admin() && isset($_GET['page']) && $_GET['page'] == 'dokan-learndash-integration') {
-            ?>
-            <style>
-                .error { color: red; }
-                .info { color: blue; }
-            </style>
-            <?php
-        }
-    }
+		return user_can( $author, 'manage_options' );
+	}
 
-	  /**
-     * Add product columns
-     */
-    public function online_texas_add_product_columns($columns) {
-        $columns['course_link'] = 'Course Link';
-        $columns['vendor_info'] = 'Vendor Info';
-        return $columns;
-    }
-    
-    /**
-     * Populate product columns
-     */
-    public function online_texas_populate_product_columns($column, $post_id) {
-        switch ($column) {
-            case 'course_link':
-                $course_ids = $this->fetch_course_from_product( $post_id );
-                if ($course_ids) {
-                    foreach ($course_ids as $key => $course_id) {
-                        $course = get_post($course_id);
-                        echo $course ? $course->post_title : 'Course not found';
-                        echo '<br>';
-                    }
-                } else {
-                    echo '—';
-                }
-                break;
-                
-            case 'vendor_info':
-                $parent_id = get_post_meta($post_id, '_parent_product_id', true);
-                if ($parent_id) {
-                    $parent = get_post($parent_id);
-                    echo 'Vendor Product<br>';
-                    echo '<small>Parent: ' . ($parent ? $parent->post_title : 'Not found') . '</small>';
-                } else {
-                    $author_id = get_post_field('post_author', $post_id);
-                    $vendor_products = $this->online_texas_get_vendor_product($post_id, $author_id);
-                    if (!empty($vendor_products)) {
-                        echo count($vendor_products) . ' vendor products';
-                    } else {
-                        echo '—';
-                    }
-                }
-                break;
-        }
-    }
+	/**
+	 * Create vendor products for all active vendors.
+	 *
+	 * @since 1.0.0
+	 * @param int   $admin_product_id The admin product ID.
+	 * @param array $course_ids       Array of course IDs.
+	 * @return int Number of vendor products created.
+	 */
+	public function create_vendor_products( $admin_product_id, $course_ids ) {
+		$vendors = dokan_get_sellers( array( 'status' => 'approved' ) );
+		
+		if ( empty( $vendors['users'] ) ) {
+			$this->log_debug( 'No active vendors found' );
+			return 0;
+		}
 
-    /**
-     * Debug logging
-     */
-    private function online_texas_debug_log($message) {
-        $log = get_option('dli_debug_log', array());
-        $log[] = array(
-            'timestamp' => current_time('mysql'),
-            'message' => $message,
-            'type' => 'debug'
-        );
-        
-        // Keep only last 50 entries
-        if (count($log) > 50) {
-            $log = array_slice($log, -50);
-        }
-        
-        update_option('dli_debug_log', $log);
-    }
+		$created_count = 0;
 
-    private function online_texas_set_group_leader($group_id, $user_id) {
-        // Set user meta
-        $current_leaders = learndash_get_groups_administrators_users($user_id);
-        if (!is_array($current_leaders)) {
-            $current_leaders = array();
-        }
-        
-        if (!in_array($group_id, $current_leaders)) {
-            $current_leaders[] = $group_id;
-            update_user_meta($user_id, 'learndash_group_leaders_' . $group_id, $group_id);
-        }
-    }
+		foreach ( $vendors['users'] as $vendor ) {
+			// Check if vendor product already exists
+			$existing_product = $this->get_vendor_product( $admin_product_id, $vendor->ID );
+			if ( $existing_product ) {
+				continue;
+			}
+
+			$result = $this->create_single_vendor_product( $admin_product_id, $vendor->ID, $course_ids );
+			if ( $result ) {
+				$created_count++;
+			}
+		}
+
+		$this->log_debug( "Created {$created_count} vendor products for admin product {$admin_product_id}" );
+
+		return $created_count;
+	}
+
+	/**
+	 * Create a single vendor product.
+	 *
+	 * @since 1.0.0
+	 * @param int   $admin_product_id The admin product ID.
+	 * @param int   $vendor_id        The vendor user ID.
+	 * @param array $course_ids       Array of course IDs.
+	 * @return int|false The created product ID on success, false on failure.
+	 */
+	public function create_single_vendor_product( $admin_product_id, $vendor_id, $course_ids ) {
+		try {
+			$admin_product = wc_get_product( $admin_product_id );
+			if ( ! $admin_product ) {
+				throw new Exception( "Invalid admin product ID: {$admin_product_id}" );
+			}
+
+			// Validate vendor
+			$vendor = get_user_by( 'ID', $vendor_id );
+			if ( ! $vendor ) {
+				throw new Exception( "Invalid vendor ID: {$vendor_id}" );
+			}
+
+			// Check if vendor is active
+			if ( ! dokan_is_user_seller( $vendor_id ) ) {
+				throw new Exception( "User {$vendor_id} is not an active vendor" );
+			}
+
+			// Get vendor store info
+			$store_info = dokan_get_store_info( $vendor_id );
+			$store_name = ! empty( $store_info['store_name'] ) ? $store_info['store_name'] : $vendor->display_name;
+
+			// Duplicate the product
+			$duplicated_product = $this->duplicate_product( $admin_product );
+			if ( is_wp_error( $duplicated_product ) ) {
+				throw new Exception( 'Failed to duplicate product: ' . $duplicated_product->get_error_message() );
+			}
+
+			// Update the duplicated product
+			$vendor_product_title = sanitize_text_field( $store_name . ' - ' . $admin_product->get_name() );
+
+			$update_result = wp_update_post( array(
+				'ID'          => $duplicated_product->get_id(),
+				'post_title'  => $vendor_product_title,
+				'post_name'   => sanitize_title( $vendor_product_title ),
+				'post_status' => 'draft',
+				'post_author' => $vendor_id
+			) );
+
+			if ( is_wp_error( $update_result ) ) {
+				throw new Exception( 'Failed to update vendor product: ' . $update_result->get_error_message() );
+			}
+
+			// Clear pricing - let vendor set their own
+			$duplicated_product->set_regular_price( '' );
+			$duplicated_product->set_sale_price( '' );
+			$duplicated_product->save();
+
+			// Create LearnDash group
+			$group_id = $this->create_learndash_group( $vendor_id, $course_ids, $vendor_product_title );
+
+			// Save metadata
+			$meta_data = array(
+				'_parent_product_id'              => $admin_product_id,
+				'_linked_ld_group_id'             => $group_id,
+				'_vendor_product_original_title'  => $admin_product->get_name(),
+				'_created_on'                     => current_time( 'mysql' )
+			);
+
+			foreach ( $meta_data as $key => $value ) {
+				update_post_meta( $duplicated_product->get_id(), $key, $value );
+			}
+
+			// Link product to LearnDash group
+			if ( $group_id ) {
+				update_post_meta( $duplicated_product->get_id(), 'learndash_group_enrolled_groups', array( $group_id ) );
+			}
+
+			$this->log_debug( "Created vendor product ID: {$duplicated_product->get_id()} for vendor: {$vendor_id}" );
+
+			return $duplicated_product->get_id();
+
+		} catch ( Exception $e ) {
+			$this->log_debug( "Error creating vendor product: " . $e->getMessage() );
+			return false;
+		}
+	}
+
+	/**
+	 * Duplicate a WooCommerce product.
+	 *
+	 * @since 1.0.0
+	 * @param WC_Product $original_product The product to duplicate.
+	 * @return WC_Product|WP_Error The duplicated product or error.
+	 */
+	private function duplicate_product( $original_product ) {
+		if ( ! $original_product instanceof WC_Product ) {
+			return new WP_Error( 'invalid_product', 'Invalid product object' );
+		}
+
+		// Try WooCommerce native duplication first
+		if ( class_exists( 'WC_Admin_Duplicate_Product' ) ) {
+			$duplicate_handler = new WC_Admin_Duplicate_Product();
+			if ( method_exists( $duplicate_handler, 'product_duplicate' ) ) {
+				return $duplicate_handler->product_duplicate( $original_product );
+			}
+		}
+
+		// Fallback: manual duplication
+		return $this->manual_product_duplicate( $original_product );
+	}
+
+	/**
+	 * Manual product duplication fallback.
+	 *
+	 * @since 1.0.0
+	 * @param WC_Product $original_product The product to duplicate.
+	 * @return WC_Product|WP_Error The duplicated product or error.
+	 */
+	private function manual_product_duplicate( $original_product ) {
+		$duplicate_data = array(
+			'post_title'     => $original_product->get_name(),
+			'post_content'   => $original_product->get_description(),
+			'post_excerpt'   => $original_product->get_short_description(),
+			'post_status'    => 'draft',
+			'post_type'      => 'product',
+			'ping_status'    => 'closed',
+			'comment_status' => 'closed'
+		);
+
+		$duplicate_id = wp_insert_post( $duplicate_data );
+
+		if ( is_wp_error( $duplicate_id ) ) {
+			return $duplicate_id;
+		}
+
+		// Copy product meta (excluding specific keys)
+		$exclude_meta = array( '_edit_lock', '_edit_last', '_related_course', '_related_group' );
+		$meta_keys = get_post_meta( $original_product->get_id() );
+		
+		foreach ( $meta_keys as $key => $values ) {
+			if ( in_array( $key, $exclude_meta, true ) ) {
+				continue;
+			}
+
+			foreach ( $values as $value ) {
+				add_post_meta( $duplicate_id, $key, maybe_unserialize( $value ) );
+			}
+		}
+
+		return wc_get_product( $duplicate_id );
+	}
+
+	/**
+	 * Create a LearnDash group for the vendor.
+	 *
+	 * @since 1.0.0
+	 * @param int    $vendor_id           The vendor user ID.
+	 * @param array  $course_ids          Array of course IDs.
+	 * @param string $vendor_product_title The vendor product title.
+	 * @return int|false The created group ID or false on failure.
+	 */
+	private function create_learndash_group( $vendor_id, $course_ids, $vendor_product_title ) {
+		// Validate course IDs
+		$valid_courses = array();
+		foreach ( $course_ids as $course_id ) {
+			$course = get_post( $course_id );
+			if ( $course && get_post_type( $course_id ) === learndash_get_post_type_slug( 'course' ) ) {
+				$valid_courses[] = intval( $course_id );
+			}
+		}
+
+		if ( empty( $valid_courses ) ) {
+			$this->log_debug( 'No valid courses found for group creation' );
+			return false;
+		}
+
+		$group_title = sanitize_text_field( $vendor_product_title );
+
+		// Create LearnDash group
+		$group_data = array(
+			'post_title'  => $group_title,
+			'post_type'   => learndash_get_post_type_slug( 'group' ),
+			'post_status' => 'publish',
+			'post_author' => $vendor_id
+		);
+
+		$group_id = wp_insert_post( $group_data );
+
+		if ( is_wp_error( $group_id ) ) {
+			$this->log_debug( 'Failed to create LearnDash group: ' . $group_id->get_error_message() );
+			return false;
+		}
+
+		// Link group to courses
+		learndash_set_group_enrolled_courses( $group_id, $valid_courses );
+
+		// Set vendor as group leader
+		$this->set_group_leader( $group_id, $vendor_id );
+
+		$this->log_debug( "Created LearnDash group ID: {$group_id} for vendor: {$vendor_id}" );
+
+		return $group_id;
+	}
+
+	/**
+	 * Set a user as a group leader for a LearnDash group.
+	 *
+	 * @since 1.0.0
+	 * @param int $group_id The group ID.
+	 * @param int $user_id  The user ID.
+	 */
+	private function set_group_leader( $group_id, $user_id ) {
+		update_user_meta( $user_id, 'learndash_group_leaders_' . $group_id, $group_id );
+	}
+
+	/**
+	 * Get existing vendor product for a given admin product and vendor.
+	 *
+	 * @since 1.0.0
+	 * @param int $admin_product_id The admin product ID.
+	 * @param int $vendor_id        The vendor user ID.
+	 * @return WP_Post|false The vendor product post or false if not found.
+	 */
+	private function get_vendor_product( $admin_product_id, $vendor_id ) {
+		$args = array(
+			'post_type'      => 'product',
+			'author'         => $vendor_id,
+			'meta_query'     => array(
+				array(
+					'key'     => '_parent_product_id',
+					'value'   => $admin_product_id,
+					'compare' => '='
+				)
+			),
+			'posts_per_page' => 1,
+			'post_status'    => 'any'
+		);
+
+		$products = get_posts( $args );
+		return ! empty( $products ) ? $products[0] : false;
+	}
+
+	/**
+	 * Sync vendor products when admin product is updated.
+	 *
+	 * @since 1.0.0
+	 * @param int $admin_product_id The admin product ID that was updated.
+	 */
+	public function sync_vendor_products( $admin_product_id ) {
+		$admin_product = wc_get_product( $admin_product_id );
+		if ( ! $admin_product ) {
+			return;
+		}
+
+		// Get all vendor products for this admin product
+		$vendor_products = get_posts( array(
+			'post_type'      => 'product',
+			'post_status'    => 'any',
+			'meta_query'     => array(
+				array(
+					'key'     => '_parent_product_id',
+					'value'   => $admin_product_id,
+					'compare' => '='
+				)
+			),
+			'posts_per_page' => -1
+		) );
+
+		$synced_count = 0;
+
+		foreach ( $vendor_products as $vendor_product_post ) {
+			$vendor_product = wc_get_product( $vendor_product_post->ID );
+			if ( ! $vendor_product ) {
+				continue;
+			}
+
+			// Only sync description for published vendor products
+			// Draft products get full sync
+			if ( $vendor_product_post->post_status === 'publish' ) {
+				// Only update description for published products
+				wp_update_post( array(
+					'ID'           => $vendor_product_post->ID,
+					'post_content' => $admin_product->get_description()
+				) );
+			} else {
+				// Full sync for draft products
+				$this->sync_single_vendor_product( $vendor_product_post->ID, $admin_product );
+			}
+
+			// Update course association
+			$admin_courses = $this->fetch_course_from_product( $admin_product_id );
+			if ( ! empty( $admin_courses ) ) {
+				$this->update_vendor_course_association( $vendor_product_post->ID, $admin_courses );
+			}
+
+			$synced_count++;
+		}
+
+		$this->log_debug( "Synced {$synced_count} vendor products for admin product {$admin_product_id}" );
+	}
+
+	/**
+	 * Sync a single vendor product with its parent admin product.
+	 *
+	 * @since 1.0.0
+	 * @param int        $vendor_product_id The vendor product ID.
+	 * @param WC_Product $admin_product     The admin product object.
+	 */
+	private function sync_single_vendor_product( $vendor_product_id, $admin_product ) {
+		$vendor_product = wc_get_product( $vendor_product_id );
+
+		if ( ! $vendor_product || ! $admin_product instanceof WC_Product ) {
+			return;
+		}
+
+		// Sync allowed product fields
+		$vendor_product->set_description( $admin_product->get_description() );
+		$vendor_product->set_short_description( $admin_product->get_short_description() );
+		$vendor_product->set_weight( $admin_product->get_weight() );
+		$vendor_product->set_dimensions( $admin_product->get_dimensions() );
+		$vendor_product->set_virtual( $admin_product->get_virtual() );
+		$vendor_product->set_downloadable( $admin_product->get_downloadable() );
+
+		// Save the updated product
+		$vendor_product->save();
+
+		$this->log_debug( "Synced vendor product ID: {$vendor_product_id}" );
+	}
+
+	/**
+	 * Update vendor course association via LearnDash group.
+	 *
+	 * @since 1.0.0
+	 * @param int   $vendor_product_id The vendor product ID.
+	 * @param array $new_course_ids    Array of new course IDs.
+	 */
+	private function update_vendor_course_association( $vendor_product_id, $new_course_ids ) {
+		$group_id = get_post_meta( $vendor_product_id, '_linked_ld_group_id', true );
+		
+		if ( $group_id ) {
+			learndash_set_group_enrolled_courses( $group_id, $new_course_ids );
+			$this->log_debug( "Updated course association for group {$group_id}" );
+		}
+	}
+
+	/**
+	 * Add custom columns to the products list table.
+	 *
+	 * @since 1.0.0
+	 * @param array $columns Existing columns.
+	 * @return array Modified columns.
+	 */
+	public function add_product_columns( $columns ) {
+		$columns['course_link'] = esc_html__( 'Linked Courses', 'online-texas-core' );
+		$columns['vendor_info'] = esc_html__( 'Vendor Info', 'online-texas-core' );
+		return $columns;
+	}
+
+	/**
+	 * Populate custom columns in the products list table.
+	 *
+	 * @since 1.0.0
+	 * @param string $column  The column name.
+	 * @param int    $post_id The post ID.
+	 */
+	public function populate_product_columns( $column, $post_id ) {
+		switch ( $column ) {
+			case 'course_link':
+				$course_ids = $this->fetch_course_from_product( $post_id );
+				if ( ! empty( $course_ids ) ) {
+					$course_titles = array();
+					foreach ( $course_ids as $course_id ) {
+						$course = get_post( $course_id );
+						if ( $course ) {
+							$course_titles[] = esc_html( $course->post_title );
+						}
+					}
+					echo implode( '<br>', $course_titles );
+				} else {
+					echo '—';
+				}
+				break;
+
+			case 'vendor_info':
+				$parent_id = get_post_meta( $post_id, '_parent_product_id', true );
+				if ( $parent_id ) {
+					$parent = get_post( $parent_id );
+					echo esc_html__( 'Vendor Product', 'online-texas-core' ) . '<br>';
+					echo '<small>' . sprintf( 
+						/* translators: %s: Parent product title */
+						esc_html__( 'Parent: %s', 'online-texas-core' ), 
+						$parent ? esc_html( $parent->post_title ) : esc_html__( 'Not found', 'online-texas-core' )
+					) . '</small>';
+				} else {
+					// Count vendor products for this admin product
+					global $wpdb;
+					$count = $wpdb->get_var( $wpdb->prepare(
+						"SELECT COUNT(*) FROM {$wpdb->posts} p 
+						INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id 
+						WHERE p.post_type = 'product' 
+						AND pm.meta_key = '_parent_product_id' 
+						AND pm.meta_value = %s",
+						$post_id
+					) );
+					
+					if ( $count > 0 ) {
+						printf( 
+							/* translators: %d: Number of vendor products */
+							esc_html__( '%d vendor products', 'online-texas-core' ), 
+							intval( $count ) 
+						);
+					} else {
+						echo '—';
+					}
+				}
+				break;
+		}
+	}
+
+	/**
+	 * Add admin menu for the plugin.
+	 *
+	 * @since 1.0.0
+	 */
+	public function add_admin_menu() {
+		// Add main menu page
+		add_submenu_page(
+			'dokan',
+			esc_html__( 'Texas Core', 'online-texas-core' ),
+			esc_html__( 'Texas Core', 'online-texas-core' ),
+			'manage_options',
+			'online-texas-core',
+			array( $this, 'admin_page' )
+		);
+
+		// Add settings page
+		add_options_page(
+			esc_html__( 'Texas Core Settings', 'online-texas-core' ),
+			esc_html__( 'Texas Core', 'online-texas-core' ),
+			'manage_options',
+			'online-texas-core-settings',
+			array( $this, 'settings_page' )
+		);
+	}
+
+	/**
+	 * Display the main admin page.
+	 *
+	 * @since 1.0.0
+	 */
+	public function admin_page() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'online-texas-core' ) );
+		}
+
+		// Get statistics
+		$stats = $this->get_plugin_statistics();
+
+		include ONLINE_TEXAS_CORE_PATH . 'admin/partials/online-texas-core-admin-display.php';
+	}
+
+	/**
+	 * Display the settings page.
+	 *
+	 * @since 1.0.0
+	 */
+	public function settings_page() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'online-texas-core' ) );
+		}
+
+		// Handle settings save
+		if ( isset( $_POST['submit'] ) && wp_verify_nonce( $_POST['otc_settings_nonce'], 'otc_save_settings' ) ) {
+			$this->save_settings();
+		}
+
+		$options = get_option( 'otc_options', array() );
+
+		include ONLINE_TEXAS_CORE_PATH . 'admin/partials/online-texas-core-settings-display.php';
+	}
+
+	/**
+	 * Save plugin settings.
+	 *
+	 * @since 1.0.0
+	 */
+	private function save_settings() {
+		$options = array(
+			'auto_create_for_new_vendors' => isset( $_POST['auto_create_for_new_vendors'] ),
+			'debug_mode'                  => isset( $_POST['debug_mode'] ),
+			'vendor_product_status'       => sanitize_text_field( $_POST['vendor_product_status'] ?? 'draft' )
+		);
+
+		// Validate vendor product status
+		$allowed_statuses = array( 'draft', 'pending', 'publish' );
+		if ( ! in_array( $options['vendor_product_status'], $allowed_statuses, true ) ) {
+			$options['vendor_product_status'] = 'draft';
+		}
+
+		update_option( 'otc_options', $options );
+
+		add_action( 'admin_notices', function() {
+			echo '<div class="notice notice-success is-dismissible"><p>' . 
+				 esc_html__( 'Settings saved successfully.', 'online-texas-core' ) . 
+				 '</p></div>';
+		});
+	}
+
+	/**
+	 * Get plugin statistics for the admin dashboard.
+	 *
+	 * @since 1.0.0
+	 * @return array Array of plugin statistics.
+	 */
+	private function get_plugin_statistics() {
+		global $wpdb;
+
+		// Get admin products with courses
+		$admin_products_count = $wpdb->get_var(
+			"SELECT COUNT(DISTINCT p.ID) 
+			FROM {$wpdb->posts} p 
+			INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id 
+			WHERE p.post_type = 'product' 
+			AND p.post_status = 'publish'
+			AND pm.meta_key IN ('_related_course', '_related_group')"
+		);
+
+		// Get vendor products count
+		$vendor_products_count = $wpdb->get_var(
+			"SELECT COUNT(*) 
+			FROM {$wpdb->posts} p 
+			INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id 
+			WHERE p.post_type = 'product' 
+			AND pm.meta_key = '_parent_product_id'"
+		);
+
+		// Get active vendors count
+		$vendors_count = 0;
+		$vendors = dokan_get_sellers( array( 'status' => 'approved' ) );
+		$vendors_count = $vendors['total_users'] ?? 0;
+
+		// Get LearnDash groups count
+		$groups_count = wp_count_posts( learndash_get_post_type_slug( 'group' ) )->publish ?? 0;
+
+		return array(
+			'admin_products'   => intval( $admin_products_count ),
+			'vendor_products'  => intval( $vendor_products_count ),
+			'active_vendors'   => intval( $vendors_count ),
+			'learndash_groups' => intval( $groups_count )
+		);
+	}
+
+	/**
+	 * Handle AJAX request for manual vendor sync.
+	 *
+	 * @since 1.0.0
+	 */
+	public function ajax_manual_vendor_sync() {
+		check_ajax_referer( 'otc_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => esc_html__( 'Insufficient permissions', 'online-texas-core' ) ) );
+		}
+
+		$vendor_id = isset( $_POST['vendor_id'] ) ? sanitize_text_field( $_POST['vendor_id'] ) : '';
+
+		if ( $vendor_id === 'all' ) {
+			$created_count = $this->sync_all_vendors();
+			wp_send_json_success( array( 
+				'message' => sprintf( 
+					/* translators: %d: Number of products created */
+					esc_html__( 'Created %d vendor products', 'online-texas-core' ), 
+					$created_count 
+				)
+			) );
+		} else {
+			$vendor_id = intval( $vendor_id );
+			$created_count = $this->sync_single_vendor( $vendor_id );
+			
+			if ( $created_count !== false ) {
+				wp_send_json_success( array( 
+					'message' => sprintf( 
+						/* translators: %d: Number of products created */
+						esc_html__( 'Created %d products for vendor', 'online-texas-core' ), 
+						$created_count 
+					)
+				) );
+			} else {
+				wp_send_json_error( array( 'message' => esc_html__( 'Failed to sync vendor', 'online-texas-core' ) ) );
+			}
+		}
+	}
+
+	/**
+	 * Sync all vendors with admin products.
+	 *
+	 * @since 1.0.0
+	 * @return int Number of products created.
+	 */
+	private function sync_all_vendors() {
+		$vendors = dokan_get_sellers( array( 'status' => 'approved' ) );
+		$total_created = 0;
+
+		if ( ! empty( $vendors['users'] ) ) {
+			foreach ( $vendors['users'] as $vendor ) {
+				$created = $this->sync_single_vendor( $vendor->ID );
+				if ( $created !== false ) {
+					$total_created += $created;
+				}
+			}
+		}
+
+		return $total_created;
+	}
+
+	/**
+	 * Sync a single vendor with admin products.
+	 *
+	 * @since 1.0.0
+	 * @param int $vendor_id The vendor user ID.
+	 * @return int|false Number of products created or false on failure.
+	 */
+	public function sync_single_vendor( $vendor_id ) {
+		if ( ! dokan_is_user_seller( $vendor_id ) ) {
+			return false;
+		}
+
+		// Get all admin products with courses
+		$admin_products = get_posts( array(
+			'post_type'      => 'product',
+			'post_status'    => 'publish',
+			'meta_query'     => array(
+				'relation' => 'OR',
+				array(
+					'key'     => '_related_course',
+					'compare' => 'EXISTS'
+				),
+				array(
+					'key'     => '_related_group',
+					'compare' => 'EXISTS'
+				)
+			),
+			'posts_per_page' => -1,
+			'fields'         => 'ids'
+		) );
+
+		$created_count = 0;
+
+		foreach ( $admin_products as $admin_product_id ) {
+			// Skip if not an admin product
+			if ( ! $this->is_admin_product( $admin_product_id ) ) {
+				continue;
+			}
+
+			// Check if vendor already has this product
+			$existing_product = $this->get_vendor_product( $admin_product_id, $vendor_id );
+			if ( $existing_product ) {
+				continue;
+			}
+
+			$course_ids = $this->fetch_course_from_product( $admin_product_id );
+			if ( ! empty( $course_ids ) ) {
+				$result = $this->create_single_vendor_product( $admin_product_id, $vendor_id, $course_ids );
+				if ( $result ) {
+					$created_count++;
+				}
+			}
+		}
+
+		return $created_count;
+	}
+
+	/**
+	 * Handle AJAX request to clear debug log.
+	 *
+	 * @since 1.0.0
+	 */
+	public function ajax_clear_debug_log() {
+		check_ajax_referer( 'otc_nonce', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => esc_html__( 'Insufficient permissions', 'online-texas-core' ) ) );
+		}
+
+		delete_option( 'otc_debug_log' );
+		wp_send_json_success( array( 'message' => esc_html__( 'Debug log cleared', 'online-texas-core' ) ) );
+	}
+
+	/**
+	 * Log debug messages.
+	 *
+	 * @since 1.0.0
+	 * @param string $message The message to log.
+	 * @param string $type    The log type (debug, error, info).
+	 */
+	private function log_debug( $message, $type = 'debug' ) {
+		// Always log to WordPress error log for errors
+		if ( $type === 'error' ) {
+			error_log( "Online Texas Core Error: {$message}" );
+		}
+
+		// Check if debug mode is enabled
+		$options = get_option( 'otc_options', array() );
+		if ( empty( $options['debug_mode'] ) ) {
+			return;
+		}
+
+		$log = get_option( 'otc_debug_log', array() );
+		$log[] = array(
+			'timestamp' => current_time( 'mysql' ),
+			'message'   => sanitize_text_field( $message ),
+			'type'      => sanitize_text_field( $type )
+		);
+
+		// Keep only last 100 entries
+		if ( count( $log ) > 100 ) {
+			$log = array_slice( $log, -100 );
+		}
+
+		update_option( 'otc_debug_log', $log );
+	}
 }

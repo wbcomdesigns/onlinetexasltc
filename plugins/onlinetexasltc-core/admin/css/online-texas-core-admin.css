@@ -1,8 +1,328 @@
 /**
  * All of the CSS for your admin-specific functionality should be
  * included in this file.
+ *
+ * @package Online_Texas_Core
+ * @since 1.0.0
  */
 
- #course_link, #vendor_info{
-    width: 10%;
- }
+/* Product List Table Columns */
+#course_link, 
+#vendor_info {
+    width: 15%;
+}
+
+/* Admin Dashboard Styles */
+.otc-dashboard {
+    max-width: 1200px;
+}
+
+.otc-dashboard .card {
+    margin-bottom: 20px;
+}
+
+/* Statistics Grid */
+.otc-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-top: 15px;
+}
+
+.otc-stat-item {
+    text-align: center;
+    padding: 20px;
+    background: #f9f9f9;
+    border-radius: 5px;
+    border-left: 4px solid #0073aa;
+}
+
+.otc-stat-number {
+    font-size: 2.5em;
+    font-weight: bold;
+    color: #0073aa;
+    margin-bottom: 5px;
+}
+
+.otc-stat-label {
+    font-size: 0.9em;
+    color: #666;
+    font-weight: 500;
+}
+
+/* Actions Grid */
+.otc-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-top: 15px;
+}
+
+.otc-action-item {
+    text-align: center;
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+.otc-action-item .button-large {
+    margin-bottom: 10px;
+}
+
+.otc-action-item .description {
+    margin: 0;
+    font-style: italic;
+}
+
+/* Vendor Sync Section */
+.otc-vendor-sync-section {
+    margin-top: 15px;
+}
+
+.otc-vendor-sync-section .wp-list-table {
+    margin-top: 15px;
+}
+
+/* Status Indicators */
+.otc-status {
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 0.9em;
+    font-weight: 500;
+}
+
+.otc-status-active {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.otc-status-inactive {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+/* Debug Log Styles */
+.otc-debug-log {
+    background: #f9f9f9;
+    padding: 15px;
+    border-radius: 5px;
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.otc-log-entry {
+    margin-bottom: 5px;
+    padding: 5px;
+    border-left: 3px solid #ddd;
+    background: #fff;
+}
+
+.otc-log-entry.otc-log-error {
+    border-left-color: #dc3545;
+    background: #fff5f5;
+}
+
+.otc-log-entry.otc-log-vendor_sync {
+    border-left-color: #0073aa;
+    background: #f0f8ff;
+}
+
+.otc-log-entry.otc-log-debug {
+    border-left-color: #28a745;
+    background: #f8fff8;
+}
+
+.otc-log-time {
+    color: #666;
+    margin-right: 10px;
+    font-weight: bold;
+}
+
+.otc-log-message {
+    color: #333;
+}
+
+/* Loading Overlay */
+#otc-loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 999999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+}
+
+.otc-loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #0073aa;
+    border-radius: 50%;
+    animation: otc-spin 1s linear infinite;
+}
+
+.otc-loading-text {
+    color: #fff;
+    margin-top: 15px;
+    font-size: 16px;
+}
+
+@keyframes otc-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .otc-stats-grid,
+    .otc-actions-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .otc-stat-number {
+        font-size: 2em;
+    }
+    
+    .otc-debug-log {
+        font-size: 11px;
+    }
+}
+
+/* Settings Page Specific */
+.otc-settings-page .form-table th {
+    width: 250px;
+}
+
+.otc-settings-page .card {
+    margin-top: 20px;
+}
+
+/* Button Styles */
+.button.otc-sync-vendor {
+    background: #0073aa;
+    border-color: #0073aa;
+    color: #fff;
+}
+
+.button.otc-sync-vendor:hover {
+    background: #005a87;
+    border-color: #005a87;
+}
+
+.button.otc-sync-vendor:disabled {
+    background: #ccc !important;
+    border-color: #ccc !important;
+    color: #666 !important;
+}
+
+/* Notices */
+.notice.inline {
+    margin: 15px 0;
+    padding: 10px 15px;
+}
+
+/* Table Improvements */
+.wp-list-table .otc-status {
+    display: inline-block;
+}
+
+.wp-list-table .button-small {
+    padding: 2px 8px;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+/* Admin Menu Icon */
+.dashicons-otc:before {
+    content: '\f239';
+}
+
+/* Help Text */
+.otc-help-text {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 15px;
+    margin: 15px 0;
+}
+
+.otc-help-text h4 {
+    margin-top: 0;
+    color: #0073aa;
+}
+
+.otc-help-text ol {
+    margin-bottom: 0;
+}
+
+.otc-help-text li {
+    margin-bottom: 10px;
+}
+
+/* System Status Table */
+.otc-system-status .widefat td {
+    padding: 10px;
+    vertical-align: middle;
+}
+
+.otc-system-status .widefat td:first-child {
+    font-weight: 600;
+    width: 200px;
+}
+
+/* Error States */
+.otc-error {
+    color: #dc3545;
+    font-weight: 500;
+}
+
+.otc-success {
+    color: #28a745;
+    font-weight: 500;
+}
+
+.otc-warning {
+    color: #ffc107;
+    font-weight: 500;
+}
+
+/* Accessibility Improvements */
+.screen-reader-text {
+    clip: rect(1px, 1px, 1px, 1px);
+    position: absolute !important;
+    height: 1px;
+    width: 1px;
+    overflow: hidden;
+}
+
+/* Focus States */
+.button:focus,
+input[type="checkbox"]:focus,
+select:focus {
+    box-shadow: 0 0 0 1px #0073aa;
+    outline: 2px solid transparent;
+}
+
+/* Print Styles */
+@media print {
+    #otc-loading-overlay,
+    .button,
+    .otc-actions-grid {
+        display: none !important;
+    }
+    
+    .otc-debug-log {
+        max-height: none;
+        overflow: visible;
+    }
+}
