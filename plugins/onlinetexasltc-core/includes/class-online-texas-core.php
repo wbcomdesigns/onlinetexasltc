@@ -111,6 +111,9 @@ class Online_Texas_Core {
 		 */
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-online-texas-core-i18n.php';
 
+
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/online-texas-general-functions.php';
+
 		/**
 		 * The class responsible for defining all actions that occur in the admin area.
 		 */
@@ -195,6 +198,25 @@ class Online_Texas_Core {
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_styles' );
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_scripts' );
 
+		// Add the custom tab to vendor dashboard
+		$this->loader->add_filter( 'dokan_query_var_filter', $plugin_public, 'add_admin_products_endpoint' );
+
+		// Add the tab to dashboard navigation
+		$this->loader->add_filter( 'dokan_get_dashboard_nav', $plugin_public, 'add_admin_products_tab' );
+
+		// Add rewrite rule for the endpoint
+		$this->loader->add_action( 'init', $plugin_public, 'add_admin_products_rewrite_rule' );
+
+		// Handle the template for admin products page
+		$this->loader->add_action( 'dokan_load_custom_template', $plugin_public, 'load_admin_products_template', 10, 1 );
+
+		// Handle AJAX request for duplicating products
+		$this->loader->add_action( 'wp_ajax_duplicate_admin_product', $plugin_public, 'handle_duplicate_admin_product' );
+		$this->loader->add_action( 'wp_ajax_nopriv_duplicate_admin_product', $plugin_public, 'handle_duplicate_admin_product' );
+
+		$this->loader->add_action( 'wp_ajax_fetch_products_lists', $plugin_public, 'fetch_products_lists_callback' );
+		$this->loader->add_action( 'wp_ajax_nopriv_fetch_products_lists', $plugin_public, 'fetch_products_lists_callback' );
+		
 	}
 
 	/**

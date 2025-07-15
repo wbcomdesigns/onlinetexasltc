@@ -73,7 +73,7 @@ class Online_Texas_Core_Admin {
 	 */
 	public function enqueue_styles( $hook ) {
 		// Only load on our admin pages
-		if ( strpos( $hook, 'online-texas-core' ) === false ) {
+		if ( strpos( $hook, 'online-texas-core' ) === false && strpos( $hook, 'edit.php' ) === false) {
 			return;
 		}
 
@@ -120,35 +120,6 @@ class Online_Texas_Core_Admin {
 	}
 
 	/**
-	 * Check if required dependencies are available.
-	 *
-	 * @since 1.1.0
-	 * @return bool True if dependencies are met, false otherwise.
-	 */
-	private function check_dependencies() {
-		$missing = array();
-
-		if ( ! class_exists( 'WooCommerce' ) ) {
-			$missing[] = 'WooCommerce';
-		}
-
-		if ( ! function_exists( 'dokan' ) ) {
-			$missing[] = 'Dokan';
-		}
-
-		if ( ! defined( 'LEARNDASH_VERSION' ) && ! class_exists( 'SFWD_LMS' ) ) {
-			$missing[] = 'LearnDash';
-		}
-
-		if ( ! empty( $missing ) ) {
-			$this->log_debug( 'Missing dependencies: ' . implode( ', ', $missing ), 'error' );
-			return false;
-		}
-
-		return true;
-	}
-
-	/**
 	 * Check if a post ID corresponds to a WooCommerce product.
 	 *
 	 * @since 1.0.0
@@ -162,46 +133,6 @@ class Online_Texas_Core_Admin {
 
 		$product = wc_get_product( $post_id );
 		return $product !== false;
-	}
-
-	/**
-	 * Fetch courses linked to a product (direct courses or via groups).
-	 *
-	 * @since 1.0.0
-	 * @param int $post_id The product ID.
-	 * @return array Array of course IDs.
-	 */
-	private function fetch_course_from_product( $post_id ) {
-		if ( ! $this->check_dependencies() ) {
-			return array();
-		}
-
-		$linked_course = get_post_meta( $post_id, '_related_course', true );
-		if ( ! is_array( $linked_course ) ) {
-			$linked_course = ! empty( $linked_course ) ? array( $linked_course ) : array();
-		}
-
-		$linked_groups = get_post_meta( $post_id, '_related_group', true );
-		
-		if ( ! empty( $linked_groups ) && is_array( $linked_groups ) ) {
-			foreach ( $linked_groups as $group_id ) {
-				if ( function_exists( 'learndash_group_enrolled_courses' ) ) {
-					$group_courses = learndash_group_enrolled_courses( $group_id );
-					
-					if ( ! empty( $group_courses ) ) {
-						if ( is_array( $group_courses ) ) {
-							$linked_course = array_merge( $linked_course, $group_courses );
-						} else {
-							$linked_course[] = $group_courses;
-						}
-					}
-				}
-			}
-			
-			$linked_course = array_unique( array_filter( $linked_course ) );
-		}
-
-		return array_map( 'intval', array_filter( $linked_course ) );
 	}
 
 	/**
@@ -221,7 +152,7 @@ class Online_Texas_Core_Admin {
 			return;
 		}
 
-		if ( ! $this->check_dependencies() ) {
+		if ( ! check_dependencies() ) {
 			return;
 		}
 
@@ -236,7 +167,7 @@ class Online_Texas_Core_Admin {
 		}
 
 		// Check if product has linked courses
-		$linked_courses = $this->fetch_course_from_product( $post_id );
+		$linked_courses = fetch_course_from_product( $post_id );
 		if ( empty( $linked_courses ) ) {
 			return;
 		}
@@ -254,24 +185,24 @@ class Online_Texas_Core_Admin {
 		set_transient( 'otc_processing_product_' . $post_id, true, 30 );
 
 		try {
-			$this->log_debug( "Processing product save for ID: {$post_id}" );
+			log_debug( "Processing product save for ID: {$post_id}" );
 
 			// Check if we've already processed this product
 			$already_processed = get_post_meta( $post_id, '_otc_vendor_products_created', true );
-
-			if ( ! $already_processed ) {
+			$enable_autosave = apply_filters('wbcom_enable_auto_product_creation', false);
+			if ( ! $already_processed && $enable_autosave) {
 				// First time - create vendor products
 				$created_count = $this->create_vendor_products( $post_id, $linked_courses );
 				if ( $created_count > 0 ) {
 					update_post_meta( $post_id, '_otc_vendor_products_created', current_time( 'mysql' ) );
-					$this->log_debug( "Created {$created_count} vendor products for admin product {$post_id}" );
+					log_debug( "Created {$created_count} vendor products for admin product {$post_id}" );
 				}
 			} else {
 				// Update existing vendor products (excludes pricing)
 				$this->sync_vendor_products( $post_id );
 			}
 		} catch ( Exception $e ) {
-			$this->log_debug( "Error processing product save: " . $e->getMessage(), 'error' );
+			log_debug( "Error processing product save: " . $e->getMessage(), 'error' );
 		} finally {
 			delete_transient( 'otc_processing_product_' . $post_id );
 		}
@@ -355,7 +286,7 @@ class Online_Texas_Core_Admin {
 		// Save updated settings
 		update_post_meta( $group_id, '_groups', $groups_settings );
 
-		$this->log_debug( "Synced vendor product {$vendor_product_id} price ({$product_price}) to group {$group_id}. Previous group price: {$old_price}" );
+		log_debug( "Synced vendor product {$vendor_product_id} price ({$product_price}) to group {$group_id}. Previous group price: {$old_price}" );
 	}
 
 	/**
@@ -396,14 +327,14 @@ class Online_Texas_Core_Admin {
 	 */
 	public function create_vendor_products( $admin_product_id, $course_ids ) {
 		if ( ! function_exists( 'dokan_get_sellers' ) ) {
-			$this->log_debug( 'dokan_get_sellers function not available', 'error' );
+			log_debug( 'dokan_get_sellers function not available', 'error' );
 			return 0;
 		}
 
 		$vendors = dokan_get_sellers( array( 'status' => 'approved' ) );
 		
 		if ( empty( $vendors['users'] ) ) {
-			$this->log_debug( 'No active vendors found' );
+			log_debug( 'No active vendors found' );
 			return 0;
 		}
 
@@ -418,7 +349,7 @@ class Online_Texas_Core_Admin {
 		foreach ( $vendors['users'] as $vendor ) {
 			// Skip the admin user who created the original product
 			if ( $vendor->ID == $admin_user_id ) {
-				$this->log_debug( "Skipping admin user {$vendor->ID} (product author) from vendor product creation" );
+				log_debug( "Skipping admin user {$vendor->ID} (product author) from vendor product creation" );
 				$skipped_admin_count++;
 				continue;
 			}
@@ -434,334 +365,17 @@ class Online_Texas_Core_Admin {
 				continue;
 			}
 
-			$result = $this->create_single_vendor_product( $admin_product_id, $vendor->ID, $course_ids );
+			$result = create_single_vendor_product( $admin_product_id, $vendor->ID, $course_ids );
 			if ( $result ) {
 				$created_count++;
 			}
 		}
 
 		if ( $skipped_admin_count > 0 ) {
-			$this->log_debug( "Skipped {$skipped_admin_count} admin users during vendor product creation" );
+			log_debug( "Skipped {$skipped_admin_count} admin users during vendor product creation" );
 		}
 
 		return $created_count;
-	}
-
-	/**
-	 * Create a single vendor product.
-	 *
-	 * @since 1.0.0
-	 * @param int   $admin_product_id The admin product ID.
-	 * @param int   $vendor_id        The vendor user ID.
-	 * @param array $course_ids       Array of course IDs.
-	 * @return int|false The created product ID on success, false on failure.
-	 */
-	public function create_single_vendor_product( $admin_product_id, $vendor_id, $course_ids ) {
-		try {
-			if ( ! $this->check_dependencies() ) {
-				throw new Exception( 'Required dependencies not available' );
-			}
-
-			$admin_product = wc_get_product( $admin_product_id );
-			if ( ! $admin_product ) {
-				throw new Exception( "Invalid admin product ID: {$admin_product_id}" );
-			}
-
-			// Validate vendor
-			$vendor = get_user_by( 'ID', $vendor_id );
-			if ( ! $vendor ) {
-				throw new Exception( "Invalid vendor ID: {$vendor_id}" );
-			}
-
-			// Check if vendor is active
-			if ( ! function_exists( 'dokan_is_user_seller' ) || ! dokan_is_user_seller( $vendor_id ) ) {
-				throw new Exception( "User {$vendor_id} is not an active vendor" );
-			}
-
-			// Get vendor store info
-			$store_info = function_exists( 'dokan_get_store_info' ) ? dokan_get_store_info( $vendor_id ) : array();
-			$store_name = ! empty( $store_info['store_name'] ) ? $store_info['store_name'] : $vendor->display_name;
-
-			// Get admin product price for initial setup
-			$admin_price = $admin_product->get_regular_price();
-			if ( empty( $admin_price ) ) {
-				$admin_price = $admin_product->get_price();
-			}
-
-			// Duplicate the product first
-			$duplicated_product = $this->duplicate_product( $admin_product );
-			if ( is_wp_error( $duplicated_product ) ) {
-				throw new Exception( 'Failed to duplicate product: ' . $duplicated_product->get_error_message() );
-			}
-
-			// Update the duplicated product
-			$vendor_product_title = sanitize_text_field( $store_name . ' - ' . $admin_product->get_name() );
-
-			$update_result = wp_update_post( array(
-				'ID'          => $duplicated_product->get_id(),
-				'post_title'  => $vendor_product_title,
-				'post_name'   => sanitize_title( $vendor_product_title ),
-				'post_status' => 'draft',
-				'post_author' => $vendor_id
-			) );
-
-			if ( is_wp_error( $update_result ) ) {
-				// Clean up on failure
-				wp_delete_post( $duplicated_product->get_id(), true );
-				throw new Exception( 'Failed to update vendor product: ' . $update_result->get_error_message() );
-			}
-
-			// Set initial price from admin product (vendor can change later)
-			if ( ! empty( $admin_price ) ) {
-				$duplicated_product->set_regular_price( $admin_price );
-				$duplicated_product->set_price( $admin_price );
-				$duplicated_product->save();
-			}
-
-			// Remove any copied course/group associations from admin product
-			delete_post_meta( $duplicated_product->get_id(), '_related_course' );
-			delete_post_meta( $duplicated_product->get_id(), '_related_group' );
-			delete_post_meta( $duplicated_product->get_id(), 'learndash_course_enrolled_courses' );
-			delete_post_meta( $duplicated_product->get_id(), 'learndash_group_enrolled_groups' );
-
-			// Create LearnDash group with product ID for URL and initial price
-			$group_id = $this->create_learndash_group( $vendor_id, $course_ids, $vendor_product_title, $duplicated_product->get_id(), $admin_price );
-			if ( ! $group_id ) {
-				// Clean up on failure
-				wp_delete_post( $duplicated_product->get_id(), true );
-				throw new Exception( 'Failed to create LearnDash group for vendor product' );
-			}
-
-			// Save metadata - including the group association
-			$meta_data = array(
-				'_parent_product_id'              => $admin_product_id,
-				'_linked_ld_group_id'             => $group_id,
-				'_vendor_product_original_title'  => $admin_product->get_name(),
-				'_created_on'                     => current_time( 'mysql' ),
-				'_related_group'                  => array( $group_id ),
-				'learndash_group_enrolled_groups' => array( $group_id )
-			);
-
-			foreach ( $meta_data as $key => $value ) {
-				update_post_meta( $duplicated_product->get_id(), $key, $value );
-			}
-
-			$this->log_debug( "Created vendor product ID: {$duplicated_product->get_id()} for vendor: {$vendor_id} with closed group: {$group_id} and initial price: {$admin_price}" );
-
-			return $duplicated_product->get_id();
-
-		} catch ( Exception $e ) {
-			$this->log_debug( "Error creating vendor product: " . $e->getMessage(), 'error' );
-			return false;
-		}
-	}
-
-	/**
-	 * Duplicate a WooCommerce product.
-	 *
-	 * @since 1.0.0
-	 * @param WC_Product $original_product The product to duplicate.
-	 * @return WC_Product|WP_Error The duplicated product or error.
-	 */
-	private function duplicate_product( $original_product ) {
-		if ( ! $original_product instanceof WC_Product ) {
-			return new WP_Error( 'invalid_product', 'Invalid product object' );
-		}
-
-		// Try WooCommerce native duplication first
-		if ( class_exists( 'WC_Admin_Duplicate_Product' ) ) {
-			$duplicate_handler = new WC_Admin_Duplicate_Product();
-			if ( method_exists( $duplicate_handler, 'product_duplicate' ) ) {
-				return $duplicate_handler->product_duplicate( $original_product );
-			}
-		}
-
-		// Fallback: manual duplication
-		return $this->manual_product_duplicate( $original_product );
-	}
-
-	/**
-	 * Manual product duplication fallback.
-	 *
-	 * @since 1.0.0
-	 * @param WC_Product $original_product The product to duplicate.
-	 * @return WC_Product|WP_Error The duplicated product or error.
-	 */
-	private function manual_product_duplicate( $original_product ) {
-		$duplicate_data = array(
-			'post_title'     => $original_product->get_name(),
-			'post_content'   => $original_product->get_description(),
-			'post_excerpt'   => $original_product->get_short_description(),
-			'post_status'    => 'draft',
-			'post_type'      => 'product',
-			'ping_status'    => 'closed',
-			'comment_status' => 'closed'
-		);
-
-		$duplicate_id = wp_insert_post( $duplicate_data );
-
-		if ( is_wp_error( $duplicate_id ) ) {
-			return $duplicate_id;
-		}
-
-		// Copy product meta (excluding specific keys)
-		$exclude_meta = array( 
-			'_edit_lock', 
-			'_edit_last', 
-			'_related_course',
-			'_related_group',
-			'learndash_course_enrolled_courses',
-			'learndash_group_enrolled_groups'
-		);
-		
-		$meta_keys = get_post_meta( $original_product->get_id() );
-		
-		foreach ( $meta_keys as $key => $values ) {
-			if ( in_array( $key, $exclude_meta, true ) ) {
-				continue;
-			}
-
-			foreach ( $values as $value ) {
-				add_post_meta( $duplicate_id, $key, maybe_unserialize( $value ) );
-			}
-		}
-
-		return wc_get_product( $duplicate_id );
-	}
-
-	/**
-	 * Create a LearnDash group for the vendor.
-	 *
-	 * @since 1.0.0
-	 * @param int    $vendor_id           The vendor user ID.
-	 * @param array  $course_ids          Array of course IDs.
-	 * @param string $vendor_product_title The vendor product title.
-	 * @param int    $vendor_product_id   The vendor product ID.
-	 * @param string $initial_price       The initial price from admin product.
-	 * @return int|false The created group ID or false on failure.
-	 */
-	private function create_learndash_group( $vendor_id, $course_ids, $vendor_product_title, $vendor_product_id = null, $initial_price = '' ) {
-		if ( ! function_exists( 'learndash_get_post_type_slug' ) ) {
-			$this->log_debug( 'LearnDash functions not available', 'error' );
-			return false;
-		}
-
-		// Validate course IDs
-		$valid_courses = array();
-		foreach ( $course_ids as $course_id ) {
-			$course = get_post( $course_id );
-			if ( $course && get_post_type( $course_id ) === learndash_get_post_type_slug( 'course' ) ) {
-				$valid_courses[] = intval( $course_id );
-			}
-		}
-
-		if ( empty( $valid_courses ) ) {
-			$this->log_debug( 'No valid courses found for group creation' );
-			return false;
-		}
-
-		$group_title = sanitize_text_field( $vendor_product_title );
-
-		// Create LearnDash group
-		$group_data = array(
-			'post_title'  => $group_title,
-			'post_type'   => learndash_get_post_type_slug( 'group' ),
-			'post_status' => 'publish',
-			'post_author' => $vendor_id
-		);
-
-		$group_id = wp_insert_post( $group_data );
-
-		if ( is_wp_error( $group_id ) || ! $group_id ) {
-			$this->log_debug( 'Failed to create LearnDash group: ' . ( is_wp_error( $group_id ) ? $group_id->get_error_message() : 'Unknown error' ), 'error' );
-			return false;
-		}
-
-		// Get the product URL for the button
-		$product_url = '';
-		if ( $vendor_product_id ) {
-			$product_url = get_permalink( $vendor_product_id );
-		}
-
-		// Set up group as closed with product link and initial price
-		$groups_settings = array(
-			0 => '', // First element is empty
-			'groups_course_short_description' => '',
-			'groups_group_price_type' => 'closed',
-			'groups_custom_button_url' => $product_url,
-			'groups_group_price' => $initial_price, // Use initial price from admin product
-			'groups_group_start_date' => '0',
-			'groups_group_end_date' => '0',
-			'groups_group_seats_limit' => 0,
-			'groups_group_price_billing_p3' => '',
-			'groups_group_price_type_subscribe_billing_recurring_times' => '',
-			'groups_group_price_billing_t3' => '',
-			'groups_group_trial_price' => '',
-			'groups_group_trial_duration_t1' => '',
-			'groups_group_trial_duration_p1' => '',
-			'groups_group_materials_enabled' => '',
-			'groups_group_materials' => '',
-			'groups_certificate' => '',
-			'groups_group_disable_content_table' => '',
-			'groups_group_courses_order_enabled' => '',
-			'groups_group_courses_orderby' => '',
-			'groups_group_courses_order' => ''
-		);
-
-		// Save group settings
-		update_post_meta( $group_id, '_groups', $groups_settings );
-		
-		// Set LearnDash price type to closed
-		update_post_meta( $group_id, '_ld_price_type', 'closed' );
-		
-		// Set related courses
-		update_post_meta( $group_id, '_related_course', $valid_courses );
-
-		// Additional LearnDash Course Grid meta (if plugin is active)
-		update_post_meta( $group_id, '_learndash_course_grid_short_description', '' );
-		update_post_meta( $group_id, '_learndash_course_grid_duration', '' );
-		update_post_meta( $group_id, '_learndash_course_grid_enable_video_preview', '0' );
-		update_post_meta( $group_id, '_learndash_course_grid_video_embed_code', '' );
-		update_post_meta( $group_id, '_learndash_course_grid_custom_button_text', '' );
-		update_post_meta( $group_id, '_learndash_course_grid_custom_ribbon_text', '' );
-		update_post_meta( $group_id, '_ld_certificate', '' );
-
-		// Link group to courses using LearnDash function
-		if ( function_exists( 'learndash_set_group_enrolled_courses' ) ) {
-			learndash_set_group_enrolled_courses( $group_id, $valid_courses );
-		}
-
-		// Set vendor as group leader
-		$this->set_group_leader( $group_id, $vendor_id );
-
-		$this->log_debug( "Successfully created closed LearnDash group ID: {$group_id} for vendor: {$vendor_id} with courses: " . implode( ',', $valid_courses ) . ", product URL: {$product_url}, and initial price: {$initial_price}" );
-
-		return intval( $group_id );
-	}
-
-	/**
-	 * Set a user as a group leader for a LearnDash group.
-	 *
-	 * @since 1.0.0
-	 * @param int $group_id The group ID.
-	 * @param int $user_id  The user ID.
-	 */
-	private function set_group_leader( $group_id, $user_id ) {
-		// Method 1: LearnDash's built-in function (preferred)
-		if ( function_exists( 'learndash_set_administrators_group_id' ) ) {
-			learndash_set_administrators_group_id( $user_id, $group_id );
-		}
-
-		// Method 2: Update group post meta to include leader
-		$group_leaders = get_post_meta( $group_id, 'learndash_group_leaders', true );
-		if ( ! is_array( $group_leaders ) ) {
-			$group_leaders = array();
-		}
-		
-		if ( ! in_array( $user_id, $group_leaders ) ) {
-			$group_leaders[] = $user_id;
-			update_post_meta( $group_id, 'learndash_group_leaders', $group_leaders );
-		}
 	}
 
 	/**
@@ -786,7 +400,7 @@ class Online_Texas_Core_Admin {
 		// Save updated settings (price remains unchanged)
 		update_post_meta( $group_id, '_groups', $groups_settings );
 
-		$this->log_debug( "Updated group {$group_id} product URL to: {$product_url} (price preserved)" );
+		log_debug( "Updated group {$group_id} product URL to: {$product_url} (price preserved)" );
 	}
 
 	/**
@@ -824,7 +438,7 @@ class Online_Texas_Core_Admin {
 	 * @param int $admin_product_id The admin product ID that was updated.
 	 */
 	public function sync_vendor_products( $admin_product_id ) {
-		if ( ! $this->check_dependencies() ) {
+		if ( ! check_dependencies() ) {
 			return;
 		}
 
@@ -875,7 +489,7 @@ class Online_Texas_Core_Admin {
 			}
 
 			// Update course association
-			$admin_courses = $this->fetch_course_from_product( $admin_product_id );
+			$admin_courses = fetch_course_from_product( $admin_product_id );
 			if ( ! empty( $admin_courses ) ) {
 				$this->update_vendor_course_association( $vendor_product_id, $admin_courses );
 			}
@@ -883,7 +497,7 @@ class Online_Texas_Core_Admin {
 			$synced_count++;
 		}
 
-		$this->log_debug( "Synced {$synced_count} vendor products for admin product {$admin_product_id} (pricing excluded)" );
+		log_debug( "Synced {$synced_count} vendor products for admin product {$admin_product_id} (pricing excluded)" );
 	}
 
 	/**
@@ -917,7 +531,7 @@ class Online_Texas_Core_Admin {
 		// Save the updated product
 		$vendor_product->save();
 
-		$this->log_debug( "Synced vendor product ID: {$vendor_product_id} (price excluded to maintain vendor independence)" );
+		log_debug( "Synced vendor product ID: {$vendor_product_id} (price excluded to maintain vendor independence)" );
 	}
 
 	/**
@@ -932,7 +546,7 @@ class Online_Texas_Core_Admin {
 		
 		if ( $group_id && function_exists( 'learndash_set_group_enrolled_courses' ) ) {
 			learndash_set_group_enrolled_courses( $group_id, $new_course_ids );
-			$this->log_debug( "Updated course association for group {$group_id}" );
+			log_debug( "Updated course association for group {$group_id}" );
 		}
 	}
 
@@ -959,7 +573,7 @@ class Online_Texas_Core_Admin {
 	public function populate_product_columns( $column, $post_id ) {
 		switch ( $column ) {
 			case 'course_link':
-				$course_ids = $this->fetch_course_from_product( $post_id );
+				$course_ids = fetch_course_from_product( $post_id );
 				if ( ! empty( $course_ids ) ) {
 					$course_titles = array();
 					foreach ( $course_ids as $course_id ) {
@@ -1285,7 +899,7 @@ class Online_Texas_Core_Admin {
 
 			// Skip if vendor is the admin who created this product
 			if ( $vendor_id == $admin_user_id ) {
-				$this->log_debug( "Skipping admin user {$vendor_id} (product author) from vendor sync for product {$admin_product_id}" );
+				log_debug( "Skipping admin user {$vendor_id} (product author) from vendor sync for product {$admin_product_id}" );
 				continue;
 			}
 
@@ -1295,9 +909,9 @@ class Online_Texas_Core_Admin {
 				continue;
 			}
 
-			$course_ids = $this->fetch_course_from_product( $admin_product_id );
+			$course_ids = fetch_course_from_product( $admin_product_id );
 			if ( ! empty( $course_ids ) ) {
-				$result = $this->create_single_vendor_product( $admin_product_id, $vendor_id, $course_ids );
+				$result = create_single_vendor_product( $admin_product_id, $vendor_id, $course_ids );
 				if ( $result ) {
 					$created_count++;
 				}
@@ -1324,39 +938,5 @@ class Online_Texas_Core_Admin {
 
 		delete_option( 'otc_debug_log' );
 		wp_send_json_success( array( 'message' => esc_html__( 'Debug log cleared', 'online-texas-core' ) ) );
-	}
-
-	/**
-	 * Log debug messages.
-	 *
-	 * @since 1.0.0
-	 * @param string $message The message to log.
-	 * @param string $type    The log type (debug, error, info).
-	 */
-	private function log_debug( $message, $type = 'debug' ) {
-		// Always log to WordPress error log for errors
-		if ( $type === 'error' ) {
-			error_log( "Online Texas Core Error: {$message}" );
-		}
-
-		// Check if debug mode is enabled
-		$options = get_option( 'otc_options', array() );
-		if ( empty( $options['debug_mode'] ) ) {
-			return;
-		}
-
-		$log = get_option( 'otc_debug_log', array() );
-		$log[] = array(
-			'timestamp' => current_time( 'mysql' ),
-			'message'   => sanitize_text_field( $message ),
-			'type'      => sanitize_text_field( $type )
-		);
-
-		// Keep only last 100 entries to prevent database bloat
-		if ( count( $log ) > 100 ) {
-			$log = array_slice( $log, -100 );
-		}
-
-		update_option( 'otc_debug_log', $log );
 	}
 }

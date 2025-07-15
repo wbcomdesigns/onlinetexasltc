@@ -2,3 +2,426 @@
  * All of the CSS for your public-facing functionality should be
  * included in this file.
  */
+
+ .admin-products-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        .admin-products-table th,
+        .admin-products-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .admin-products-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+        
+        .product-thumbnail {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+        
+        .duplicate-btn {
+            background-color: #007cba;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .duplicate-btn:hover {
+            background-color: #005a87;
+        }
+        
+        .duplicate-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .admin-products-pagination {
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        .admin-products-pagination a {
+            display: inline-block;
+            padding: 8px 16px;
+            margin: 0 4px;
+            border: 1px solid #ddd;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        
+        .admin-products-pagination a:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .admin-products-pagination .current {
+            background-color: #007cba;
+            color: white;
+            border-color: #007cba;
+        }
+
+                .dokan-admin-products-wrap {
+            background: #fff;
+            padding: 0;
+        }
+        
+        .dokan-admin-products-wrap .dokan-dashboard-header {
+            background: #f8f9fa;
+            padding: 20px;
+            border-bottom: 1px solid #e9ecef;
+            margin-bottom: 0;
+        }
+        
+        .dokan-admin-products-wrap .dokan-dashboard-header h1 {
+            margin: 0;
+            font-size: 24px;
+            color: #333;
+        }
+        .online-texas-dashboard-content{
+            width: 100%;
+        }
+
+        .dokan-admin-products-wrap .online-texas-dashboard-content {
+            padding: 20px;
+        }
+        
+        .admin-products-filters {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        
+        .admin-products-search-container {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .admin-products-search {
+            flex: 1;
+            max-width: 300px;
+        }
+        
+        .dokan-dashboard-product-listing {
+            background: #fff;
+            border-radius: 4px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .admin-products-table {
+            width: 100%;
+            margin: 0;
+        }
+        
+        .admin-products-table th,
+        .admin-products-table td {
+            padding: 15px 12px;
+            text-align: left;
+            border-bottom: 1px solid #e9ecef;
+            vertical-align: middle;
+        }
+        
+        .admin-products-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+            font-size: 14px;
+        }
+        
+        .admin-products-table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .product-thumbnail {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 4px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .dokan-product-placeholder {
+            display: inline-block;
+            width: 50px;
+            height: 50px;
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            text-align: center;
+            line-height: 48px;
+            color: #6c757d;
+            font-size: 18px;
+        }
+        
+        .product-name strong {
+            font-size: 15px;
+            color: #333;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .product-excerpt {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.4;
+        }
+        
+        .product-price {
+            font-size: 14px;
+        }
+        
+        .original-price {
+            color: #999;
+            font-size: 12px;
+            display: block;
+        }
+        
+        .sale-price {
+            color: #dc3545;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .regular-price {
+            color: #333;
+            font-weight: 600;
+        }
+        
+        .duplicate-btn {
+            min-width: 100px;
+            white-space: nowrap;
+        }
+        
+        .duplicate-btn i {
+            margin-right: 5px;
+        }
+        
+        .dokan-pagination-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        .dokan-pagination {
+            display: inline-block;
+        }
+        
+        .dokan-pagination ul {
+            list-style: none;
+            display: inline-flex;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .dokan-pagination li {
+            margin: 0 2px;
+        }
+        
+        .dokan-pagination a,
+        .dokan-pagination span {
+            display: block;
+            padding: 8px 12px;
+            border: 1px solid #dee2e6;
+            color: #007cba;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .dokan-pagination a:hover {
+            background-color: #e9ecef;
+        }
+        
+        .dokan-pagination .current span {
+            background-color: #007cba;
+            color: white;
+            border-color: #007cba;
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .admin-products-search-container {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .admin-products-search {
+                max-width: 100%;
+            }
+            
+            .admin-products-table {
+                font-size: 12px;
+            }
+            
+            .admin-products-table th,
+            .admin-products-table td {
+                padding: 10px 8px;
+            }
+            
+            .product-thumbnail,
+            .dokan-product-placeholder {
+                width: 40px;
+                height: 40px;
+            }
+            
+            .dokan-product-placeholder {
+                line-height: 38px;
+                font-size: 14px;
+            }
+            
+            .product-name strong {
+                font-size: 13px;
+            }
+            
+            .product-excerpt {
+                font-size: 11px;
+            }
+            
+            .duplicate-btn {
+                min-width: 80px;
+                font-size: 11px;
+                padding: 6px 10px;
+            }
+        }
+        
+        /* Hide specific columns on mobile */
+        @media (max-width: 480px) {
+            .admin-products-table .product-category,
+            .admin-products-table .product-stock {
+                display: none;
+            }
+        }
+        
+        /* Alert styles */
+        .dokan-alert {
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            position: relative;
+        }
+        
+        .dokan-alert-success {
+            color: #155724;
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+        
+        .dokan-alert-danger {
+            color: #721c24;
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+        
+        .dokan-alert-info {
+            color: #0c5460;
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+        }
+        
+        .dokan-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: inherit;
+            opacity: 0.7;
+        }
+        
+        .dokan-close:hover {
+            opacity: 1;
+        }
+        
+        .duplicate-btn {
+            background-color: #007cba;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .duplicate-btn:hover {
+            background-color: #005a87;
+        }
+        
+        .duplicate-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .admin-products-pagination {
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        .admin-products-pagination a {
+            display: inline-block;
+            padding: 8px 16px;
+            margin: 0 4px;
+            border: 1px solid #ddd;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        
+        .admin-products-pagination a:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .admin-products-pagination .current {
+            background-color: #007cba;
+            color: white;
+            border-color: #007cba;
+        }
+
+        .dokan-pagination-container {
+    margin: 20px 0;
+    text-align: center;
+}
+
+.dokan-pagination ul {
+    display: inline-flex;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.dokan-pagination li {
+    margin: 0 2px;
+}
+
+.dokan-pagination a,
+.dokan-pagination span {
+    display: block;
+    padding: 8px 12px;
+    text-decoration: none;
+    border: 1px solid #ddd;
+    background: #fff;
+    color: #333;
+}
+
+.dokan-pagination .current {
+    background: #0073aa;
+    color: white;
+    border-color: #0073aa;
+}
+
+.dokan-pagination a:hover {
+    background: #f5f5f5;
+}
