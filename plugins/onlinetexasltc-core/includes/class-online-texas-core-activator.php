@@ -75,6 +75,9 @@ class Online_Texas_Core_Activator {
 		// Create default options
 		self::create_default_options();
 
+		// Set default product availability for existing products
+		self::set_default_product_availability();
+
 		// Set plugin version for future upgrades
 		update_option( 'online_texas_core_version', ONLINE_TEXAS_CORE_VERSION );
 
@@ -117,19 +120,37 @@ class Online_Texas_Core_Activator {
 
 	/**
 	 * Create default plugin options.
+	 * Task 1.3: Update default settings to be more restrictive.
 	 *
 	 * @since 1.0.0
 	 */
 	private static function create_default_options() {
+		// Task 1.3: Updated default options
 		$default_options = array(
-			'auto_create_for_new_vendors' => true,
+			'auto_create_for_new_vendors' => false,  // Changed from true
 			'debug_mode'                  => false,
-			'vendor_product_status'       => 'draft'
+			'vendor_product_status'       => 'draft',
+			'plugin_enabled'              => false   // New master switch
 		);
 
 		// Only add options if they don't already exist
 		if ( false === get_option( 'otc_options' ) ) {
 			add_option( 'otc_options', $default_options );
+		} else {
+			// Update existing options with new defaults if they don't exist
+			$existing_options = get_option( 'otc_options', array() );
+			$updated = false;
+			
+			foreach ( $default_options as $key => $default_value ) {
+				if ( ! isset( $existing_options[ $key ] ) ) {
+					$existing_options[ $key ] = $default_value;
+					$updated = true;
+				}
+			}
+			
+			if ( $updated ) {
+				update_option( 'otc_options', $existing_options );
+			}
 		}
 
 		// Initialize debug log
@@ -141,6 +162,82 @@ class Online_Texas_Core_Activator {
 		if ( false === get_option( 'otc_activated_on' ) ) {
 			add_option( 'otc_activated_on', current_time( 'mysql' ) );
 		}
+	}
+
+	/**
+	 * Set default product availability for existing products.
+	 * Task 1.3: Products with courses default to "Available to All Vendors",
+	 * products without courses default to "Not Available".
+	 *
+	 * @since 1.1.0
+	 */
+	private static function set_default_product_availability() {
+		// Get all products that don't have availability settings
+		$products_without_availability = get_posts( array(
+			'post_type'      => 'product',
+			'post_status'    => 'any',
+			'posts_per_page' => -1,
+			'meta_query'     => array(
+				array(
+					'key'     => '_available_for_vendors',
+					'compare' => 'NOT EXISTS'
+				)
+			),
+			'fields' => 'ids'
+		) );
+
+		$updated_count = 0;
+
+		foreach ( $products_without_availability as $product_id ) {
+			// Check if product has linked courses
+			$course_ids = self::get_product_courses( $product_id );
+			
+			if ( ! empty( $course_ids ) ) {
+				// Product has courses - default to available to all vendors
+				update_post_meta( $product_id, '_available_for_vendors', 'yes' );
+				update_post_meta( $product_id, '_restricted_vendors', array() );
+			} else {
+				// Product has no courses - default to not available
+				update_post_meta( $product_id, '_available_for_vendors', 'no' );
+				update_post_meta( $product_id, '_restricted_vendors', array() );
+			}
+			
+			$updated_count++;
+		}
+
+		if ( $updated_count > 0 ) {
+			error_log( "Online Texas Core: Set default availability for {$updated_count} products during activation." );
+		}
+	}
+
+	/**
+	 * Get courses linked to a product (helper method for activation).
+	 *
+	 * @since 1.1.0
+	 * @param int $product_id The product ID.
+	 * @return array Array of course IDs.
+	 */
+	private static function get_product_courses( $product_id ) {
+		// Get direct course links
+		$courses = get_post_meta( $product_id, '_related_course', true );
+		if ( ! is_array( $courses ) ) {
+			$courses = ! empty( $courses ) ? array( $courses ) : array();
+		}
+
+		// Get courses from groups
+		$groups = get_post_meta( $product_id, '_related_group', true );
+		if ( ! empty( $groups ) && is_array( $groups ) ) {
+			foreach ( $groups as $group_id ) {
+				if ( function_exists( 'learndash_group_enrolled_courses' ) ) {
+					$group_courses = learndash_group_enrolled_courses( $group_id );
+					if ( ! empty( $group_courses ) ) {
+						$courses = array_merge( $courses, (array) $group_courses );
+					}
+				}
+			}
+		}
+
+		return array_unique( array_filter( array_map( 'intval', $courses ) ) );
 	}
 
 	/**
@@ -182,8 +279,9 @@ class Online_Texas_Core_Activator {
 		
 		// Add new options if they don't exist
 		$new_defaults = array(
-			'auto_create_for_new_vendors' => true,
-			'vendor_product_status'       => 'draft'
+			'auto_create_for_new_vendors' => false,  // Changed default for existing installations
+			'vendor_product_status'       => 'draft',
+			'plugin_enabled'              => false   // New master switch, default to disabled
 		);
 
 		foreach ( $new_defaults as $key => $default_value ) {
@@ -193,6 +291,9 @@ class Online_Texas_Core_Activator {
 		}
 
 		update_option( 'otc_options', $options );
+
+		// Set default product availability for existing products
+		self::set_default_product_availability();
 
 		// Log upgrade
 		error_log( 'Online Texas Core Plugin upgraded to v1.1.0' );

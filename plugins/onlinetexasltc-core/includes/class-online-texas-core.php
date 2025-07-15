@@ -166,6 +166,7 @@ class Online_Texas_Core {
 		// Add AJAX handlers
 		$this->loader->add_action( 'wp_ajax_otc_manual_vendor_sync', $plugin_admin, 'ajax_manual_vendor_sync' );
 		$this->loader->add_action( 'wp_ajax_otc_clear_debug_log', $plugin_admin, 'ajax_clear_debug_log' );
+		$this->loader->add_action( 'wp_ajax_otc_sync_product_to_vendors', $plugin_admin, 'ajax_sync_product_to_vendors' );
 
 		// Handle admin product save (for creating vendor products)
 		$this->loader->add_action( 'save_post', $plugin_admin, 'save_product', 100, 2 );

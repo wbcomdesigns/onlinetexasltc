@@ -52,6 +52,10 @@ class Online_Texas_Core_Admin {
 		
 		// Declare HPOS compatibility
 		add_action( 'before_woocommerce_init', array( $this, 'declare_hpos_compatibility' ) );
+		
+		// Add meta box for product vendor availability
+		add_action( 'add_meta_boxes', array( $this, 'add_vendor_availability_meta_box' ) );
+		add_action( 'save_post', array( $this, 'save_vendor_availability_meta' ), 10, 2 );
 	}
 
 	/**
@@ -66,6 +70,232 @@ class Online_Texas_Core_Admin {
 	}
 
 	/**
+	 * Add vendor availability meta box to product edit page.
+	 *
+	 * @since 1.1.0
+	 */
+	public function add_vendor_availability_meta_box() {
+		add_meta_box(
+			'otc_vendor_availability',
+			__( 'Vendor Availability', 'online-texas-core' ),
+			array( $this, 'render_vendor_availability_meta_box' ),
+			'product',
+			'side',
+			'default'
+		);
+	}
+
+	/**
+	 * Render the vendor availability meta box.
+	 *
+	 * @since 1.1.0
+	 * @param WP_Post $post The post object.
+	 */
+	public function render_vendor_availability_meta_box( $post ) {
+		// Add nonce for security
+		wp_nonce_field( 'otc_vendor_availability_nonce', 'otc_vendor_availability_nonce' );
+
+		// Get current values
+		$available_for_vendors = get_post_meta( $post->ID, '_available_for_vendors', true );
+		$restricted_vendors = get_post_meta( $post->ID, '_restricted_vendors', true );
+		
+		// Get course count
+		$course_ids = fetch_course_from_product( $post->ID );
+		$has_courses = ! empty( $course_ids );
+		
+		// Get vendor product count
+		global $wpdb;
+		$vendor_count = $wpdb->get_var( $wpdb->prepare(
+			"SELECT COUNT(*) FROM {$wpdb->posts} p 
+			INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id 
+			WHERE p.post_type = 'product' 
+			AND pm.meta_key = '_parent_product_id' 
+			AND pm.meta_value = %s",
+			$post->ID
+		) );
+
+		// Set default based on course presence
+		if ( empty( $available_for_vendors ) ) {
+			$available_for_vendors = $has_courses ? 'yes' : 'no';
+		}
+
+		if ( ! is_array( $restricted_vendors ) ) {
+			$restricted_vendors = array();
+		}
+
+		?>
+		<div id="otc-vendor-availability-options">
+			<?php if ( $has_courses ) : ?>
+				<p><strong><?php esc_html_e( 'Linked Courses:', 'online-texas-core' ); ?></strong> <?php echo count( $course_ids ); ?></p>
+				<p><strong><?php esc_html_e( 'Vendor Products:', 'online-texas-core' ); ?></strong> <?php echo intval( $vendor_count ); ?></p>
+				
+				<p><label>
+					<input type="radio" name="_available_for_vendors" value="yes" <?php checked( $available_for_vendors, 'yes' ); ?>>
+					<?php esc_html_e( 'Available to All Vendors', 'online-texas-core' ); ?>
+				</label></p>
+				
+				<p><label>
+					<input type="radio" name="_available_for_vendors" value="selective" <?php checked( $available_for_vendors, 'selective' ); ?>>
+					<?php esc_html_e( 'Available to Selected Vendors Only', 'online-texas-core' ); ?>
+				</label></p>
+				
+				<p><label>
+					<input type="radio" name="_available_for_vendors" value="no" <?php checked( $available_for_vendors, 'no' ); ?>>
+					<?php esc_html_e( 'Not Available to Vendors', 'online-texas-core' ); ?>
+				</label></p>
+
+				<div id="otc-vendor-selection" style="<?php echo $available_for_vendors !== 'selective' ? 'display:none;' : ''; ?>">
+					<p><strong><?php esc_html_e( 'Select Vendors:', 'online-texas-core' ); ?></strong></p>
+					<?php $this->render_vendor_checklist( $restricted_vendors ); ?>
+				</div>
+
+				<div id="otc-sync-actions" style="margin-top: 15px;">
+					<p><strong><?php esc_html_e( 'Sync Actions:', 'online-texas-core' ); ?></strong></p>
+					<button type="button" class="button" id="otc-sync-to-all" data-product-id="<?php echo esc_attr( $post->ID ); ?>">
+						<?php esc_html_e( 'Sync to All Vendors', 'online-texas-core' ); ?>
+					</button>
+					<button type="button" class="button" id="otc-sync-to-selected" data-product-id="<?php echo esc_attr( $post->ID ); ?>">
+						<?php esc_html_e( 'Sync to Selected Vendors', 'online-texas-core' ); ?>
+					</button>
+					<p class="description"><?php printf( esc_html__( '%d vendors currently have this product', 'online-texas-core' ), intval( $vendor_count ) ); ?></p>
+				</div>
+			<?php else : ?>
+				<p><?php esc_html_e( 'This product has no linked courses. Vendor availability is disabled.', 'online-texas-core' ); ?></p>
+				<input type="hidden" name="_available_for_vendors" value="no">
+			<?php endif; ?>
+		</div>
+
+		<script>
+		jQuery(document).ready(function($) {
+			$('input[name="_available_for_vendors"]').change(function() {
+				if ($(this).val() === 'selective') {
+					$('#otc-vendor-selection').show();
+				} else {
+					$('#otc-vendor-selection').hide();
+				}
+			});
+
+			$('#otc-sync-to-all, #otc-sync-to-selected').click(function() {
+				var productId = $(this).data('product-id');
+				var syncType = $(this).attr('id') === 'otc-sync-to-all' ? 'all' : 'selected';
+				var $button = $(this);
+				var originalText = $button.text();
+				
+				$button.prop('disabled', true).text('Syncing...');
+				
+				$.post(ajaxurl, {
+					action: 'otc_sync_product_to_vendors',
+					product_id: productId,
+					sync_type: syncType,
+					nonce: '<?php echo wp_create_nonce( 'otc_sync_nonce' ); ?>'
+				}, function(response) {
+					if (response.success) {
+						alert(response.data.message);
+					} else {
+						alert('Error: ' + response.data.message);
+					}
+				}).always(function() {
+					$button.prop('disabled', false).text(originalText);
+				});
+			});
+		});
+		</script>
+
+		<style>
+		#otc-vendor-availability-options label {
+			display: block;
+			margin-bottom: 5px;
+		}
+		#otc-vendor-selection {
+			border: 1px solid #ddd;
+			padding: 10px;
+			margin-top: 10px;
+			max-height: 150px;
+			overflow-y: auto;
+		}
+		#otc-vendor-selection label {
+			margin-bottom: 3px;
+			font-weight: normal;
+		}
+		#otc-sync-actions button {
+			margin-right: 5px;
+			margin-bottom: 5px;
+		}
+		</style>
+		<?php
+	}
+
+	/**
+	 * Render vendor checklist for selective availability.
+	 *
+	 * @since 1.1.0
+	 * @param array $selected_vendors Array of selected vendor IDs.
+	 */
+	private function render_vendor_checklist( $selected_vendors ) {
+		if ( ! function_exists( 'dokan_get_sellers' ) ) {
+			echo '<p>' . esc_html__( 'Dokan not available', 'online-texas-core' ) . '</p>';
+			return;
+		}
+
+		$vendors = dokan_get_sellers( array( 'status' => 'approved' ) );
+		
+		if ( empty( $vendors['users'] ) ) {
+			echo '<p>' . esc_html__( 'No active vendors found', 'online-texas-core' ) . '</p>';
+			return;
+		}
+
+		foreach ( $vendors['users'] as $vendor ) {
+			$checked = in_array( $vendor->ID, $selected_vendors ) ? 'checked' : '';
+			echo '<label>';
+			echo '<input type="checkbox" name="_restricted_vendors[]" value="' . esc_attr( $vendor->ID ) . '" ' . $checked . '>';
+			echo esc_html( $vendor->display_name ) . ' (' . esc_html( $vendor->user_email ) . ')';
+			echo '</label>';
+		}
+	}
+
+	/**
+	 * Save vendor availability meta data.
+	 *
+	 * @since 1.1.0
+	 * @param int     $post_id The post ID.
+	 * @param WP_Post $post    The post object.
+	 */
+	public function save_vendor_availability_meta( $post_id, $post ) {
+		// Security checks
+		if ( ! isset( $_POST['otc_vendor_availability_nonce'] ) || 
+			 ! wp_verify_nonce( $_POST['otc_vendor_availability_nonce'], 'otc_vendor_availability_nonce' ) ) {
+			return;
+		}
+
+		if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+			return;
+		}
+
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			return;
+		}
+
+		if ( $post->post_type !== 'product' ) {
+			return;
+		}
+
+		// Save availability setting
+		$available_for_vendors = sanitize_text_field( $_POST['_available_for_vendors'] ?? 'no' );
+		$allowed_values = array( 'yes', 'no', 'selective' );
+		if ( ! in_array( $available_for_vendors, $allowed_values ) ) {
+			$available_for_vendors = 'no';
+		}
+		update_post_meta( $post_id, '_available_for_vendors', $available_for_vendors );
+
+		// Save restricted vendors
+		$restricted_vendors = array();
+		if ( $available_for_vendors === 'selective' && isset( $_POST['_restricted_vendors'] ) ) {
+			$restricted_vendors = array_map( 'intval', $_POST['_restricted_vendors'] );
+		}
+		update_post_meta( $post_id, '_restricted_vendors', $restricted_vendors );
+	}
+
+	/**
 	 * Register the stylesheets for the admin area.
 	 *
 	 * @since    1.0.0
@@ -73,7 +303,7 @@ class Online_Texas_Core_Admin {
 	 */
 	public function enqueue_styles( $hook ) {
 		// Only load on our admin pages
-		if ( strpos( $hook, 'online-texas-core' ) === false && strpos( $hook, 'edit.php' ) === false) {
+		if ( strpos( $hook, 'online-texas-core' ) === false && strpos( $hook, 'edit.php' ) === false && strpos( $hook, 'post.php' ) === false ) {
 			return;
 		}
 
@@ -94,7 +324,7 @@ class Online_Texas_Core_Admin {
 	 */
 	public function enqueue_scripts( $hook ) {
 		// Only load on our admin pages
-		if ( strpos( $hook, 'online-texas-core' ) === false ) {
+		if ( strpos( $hook, 'online-texas-core' ) === false && strpos( $hook, 'post.php' ) === false ) {
 			return;
 		}
 
@@ -152,6 +382,12 @@ class Online_Texas_Core_Admin {
 			return;
 		}
 
+		// Check if plugin functionality is enabled
+		$options = get_option( 'otc_options', array() );
+		if ( empty( $options['plugin_enabled'] ) ) {
+			return; // Plugin functionality disabled
+		}
+
 		if ( ! check_dependencies() ) {
 			return;
 		}
@@ -189,8 +425,11 @@ class Online_Texas_Core_Admin {
 
 			// Check if we've already processed this product
 			$already_processed = get_post_meta( $post_id, '_otc_vendor_products_created', true );
-			$enable_autosave = apply_filters('wbcom_enable_auto_product_creation', false);
-			if ( ! $already_processed && $enable_autosave) {
+			
+			// Use the auto_create_for_new_vendors option
+			$enable_autosave = ! empty( $options['auto_create_for_new_vendors'] );
+			
+			if ( ! $already_processed && $enable_autosave ) {
 				// First time - create vendor products
 				$created_count = $this->create_vendor_products( $post_id, $linked_courses );
 				if ( $created_count > 0 ) {
@@ -361,7 +600,7 @@ class Online_Texas_Core_Admin {
 			}
 
 			// Check if auto-creation is enabled for new vendors
-			if ( isset( $options['auto_create_for_new_vendors'] ) && ! $options['auto_create_for_new_vendors'] ) {
+			if ( empty( $options['auto_create_for_new_vendors'] ) ) {
 				continue;
 			}
 
@@ -559,7 +798,7 @@ class Online_Texas_Core_Admin {
 	 */
 	public function add_product_columns( $columns ) {
 		$columns['course_link'] = esc_html__( 'Linked Courses', 'online-texas-core' );
-		$columns['vendor_info'] = esc_html__( 'Vendor Info', 'online-texas-core' );
+		$columns['vendor_availability'] = esc_html__( 'Vendor Availability', 'online-texas-core' );
 		return $columns;
 	}
 
@@ -588,7 +827,7 @@ class Online_Texas_Core_Admin {
 				}
 				break;
 
-			case 'vendor_info':
+			case 'vendor_availability':
 				$parent_id = get_post_meta( $post_id, '_parent_product_id', true );
 				if ( $parent_id ) {
 					$parent = get_post( $parent_id );
@@ -599,6 +838,16 @@ class Online_Texas_Core_Admin {
 						$parent ? esc_html( $parent->post_title ) : esc_html__( 'Not found', 'online-texas-core' )
 					) . '</small>';
 				} else {
+					// Check availability status
+					$course_ids = fetch_course_from_product( $post_id );
+					if ( empty( $course_ids ) ) {
+						echo '<span style="color: #666;">— ' . esc_html__( 'No Courses', 'online-texas-core' ) . '</span>';
+						break;
+					}
+
+					$available_for_vendors = get_post_meta( $post_id, '_available_for_vendors', true );
+					$restricted_vendors = get_post_meta( $post_id, '_restricted_vendors', true );
+
 					// Count vendor products for this admin product
 					global $wpdb;
 					$count = $wpdb->get_var( $wpdb->prepare(
@@ -609,15 +858,30 @@ class Online_Texas_Core_Admin {
 						AND pm.meta_value = %s",
 						$post_id
 					) );
-					
+
+					switch ( $available_for_vendors ) {
+						case 'yes':
+							echo '<span style="color: #28a745;">✓ ' . esc_html__( 'All Vendors', 'online-texas-core' ) . '</span>';
+							break;
+						case 'selective':
+							$vendor_count = is_array( $restricted_vendors ) ? count( $restricted_vendors ) : 0;
+							echo '<span style="color: #ffc107;">⚡ ' . sprintf( esc_html__( 'Selected (%d)', 'online-texas-core' ), $vendor_count ) . '</span>';
+							break;
+						case 'no':
+							echo '<span style="color: #dc3545;">✗ ' . esc_html__( 'Restricted', 'online-texas-core' ) . '</span>';
+							break;
+						default:
+							// Default based on course presence
+							if ( ! empty( $course_ids ) ) {
+								echo '<span style="color: #28a745;">✓ ' . esc_html__( 'All Vendors', 'online-texas-core' ) . '</span>';
+							} else {
+								echo '<span style="color: #dc3545;">✗ ' . esc_html__( 'Restricted', 'online-texas-core' ) . '</span>';
+							}
+							break;
+					}
+
 					if ( $count > 0 ) {
-						printf( 
-							/* translators: %d: Number of vendor products */
-							esc_html__( '%d vendor products', 'online-texas-core' ), 
-							intval( $count ) 
-						);
-					} else {
-						echo '—';
+						echo '<br><small>(' . sprintf( esc_html__( '%d duplicated', 'online-texas-core' ), intval( $count ) ) . ')</small>';
 					}
 				}
 				break;
@@ -697,7 +961,8 @@ class Online_Texas_Core_Admin {
 		$options = array(
 			'auto_create_for_new_vendors' => isset( $_POST['auto_create_for_new_vendors'] ),
 			'debug_mode'                  => isset( $_POST['debug_mode'] ),
-			'vendor_product_status'       => sanitize_text_field( $_POST['vendor_product_status'] ?? 'draft' )
+			'vendor_product_status'       => sanitize_text_field( $_POST['vendor_product_status'] ?? 'draft' ),
+			'plugin_enabled'              => isset( $_POST['plugin_enabled'] )
 		);
 
 		// Validate vendor product status
@@ -823,6 +1088,90 @@ class Online_Texas_Core_Admin {
 					wp_send_json_error( array( 'message' => esc_html__( 'Failed to sync vendor', 'online-texas-core' ) ) );
 				}
 			}
+		} catch ( Exception $e ) {
+			wp_send_json_error( array( 'message' => esc_html__( 'Sync failed: ', 'online-texas-core' ) . $e->getMessage() ) );
+		}
+	}
+
+	/**
+	 * Handle AJAX request for product-level sync.
+	 *
+	 * @since 1.1.0
+	 */
+	public function ajax_sync_product_to_vendors() {
+		// Security checks
+		if ( ! check_ajax_referer( 'otc_sync_nonce', 'nonce', false ) ) {
+			wp_send_json_error( array( 'message' => esc_html__( 'Security check failed', 'online-texas-core' ) ) );
+		}
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => esc_html__( 'Insufficient permissions', 'online-texas-core' ) ) );
+		}
+
+		$product_id = isset( $_POST['product_id'] ) ? intval( $_POST['product_id'] ) : 0;
+		$sync_type = isset( $_POST['sync_type'] ) ? sanitize_text_field( $_POST['sync_type'] ) : 'all';
+
+		if ( ! $product_id ) {
+			wp_send_json_error( array( 'message' => esc_html__( 'Invalid product ID', 'online-texas-core' ) ) );
+		}
+
+		try {
+			$course_ids = fetch_course_from_product( $product_id );
+			if ( empty( $course_ids ) ) {
+				wp_send_json_error( array( 'message' => esc_html__( 'Product has no linked courses', 'online-texas-core' ) ) );
+			}
+
+			$created_count = 0;
+			$updated_count = 0;
+
+			if ( $sync_type === 'all' ) {
+				// Sync to all vendors
+				if ( function_exists( 'dokan_get_sellers' ) ) {
+					$vendors = dokan_get_sellers( array( 'status' => 'approved' ) );
+					if ( ! empty( $vendors['users'] ) ) {
+						foreach ( $vendors['users'] as $vendor ) {
+							$existing_product = $this->get_vendor_product( $product_id, $vendor->ID );
+							if ( $existing_product ) {
+								$this->sync_single_vendor_product( $existing_product->ID, wc_get_product( $product_id ) );
+								$updated_count++;
+							} else {
+								$result = create_single_vendor_product( $product_id, $vendor->ID, $course_ids );
+								if ( $result ) {
+									$created_count++;
+								}
+							}
+						}
+					}
+				}
+			} else {
+				// Sync to selected vendors only
+				$availability = get_post_meta( $product_id, '_available_for_vendors', true );
+				$restricted_vendors = get_post_meta( $product_id, '_restricted_vendors', true );
+				
+				if ( $availability === 'selective' && is_array( $restricted_vendors ) ) {
+					foreach ( $restricted_vendors as $vendor_id ) {
+						$existing_product = $this->get_vendor_product( $product_id, $vendor_id );
+						if ( $existing_product ) {
+							$this->sync_single_vendor_product( $existing_product->ID, wc_get_product( $product_id ) );
+							$updated_count++;
+						} else {
+							$result = create_single_vendor_product( $product_id, $vendor_id, $course_ids );
+							if ( $result ) {
+								$created_count++;
+							}
+						}
+					}
+				}
+			}
+
+			wp_send_json_success( array( 
+				'message' => sprintf( 
+					esc_html__( 'Sync completed: %d created, %d updated', 'online-texas-core' ), 
+					$created_count, 
+					$updated_count 
+				)
+			) );
+
 		} catch ( Exception $e ) {
 			wp_send_json_error( array( 'message' => esc_html__( 'Sync failed: ', 'online-texas-core' ) . $e->getMessage() ) );
 		}

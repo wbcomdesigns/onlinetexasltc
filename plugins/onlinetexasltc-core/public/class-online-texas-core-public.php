@@ -57,18 +57,6 @@ class Online_Texas_Core_Public {
 	 * @since    1.0.0
 	 */
 	public function enqueue_styles() {
-		/**
-		 * This function is provided for demonstration purposes only.
-		 *
-		 * An instance of this class should be passed to the run() function
-		 * defined in Online_Texas_Core_Loader as all of the hooks are defined
-		 * in that particular class.
-		 *
-		 * The Online_Texas_Core_Loader will then create the relationship
-		 * between the defined hooks and the functions defined in this
-		 * class.
-		 */
-
 		wp_enqueue_style( 
 			$this->plugin_name, 
 			ONLINE_TEXAS_CORE_URL . 'public/css/online-texas-core-public.css', 
@@ -84,18 +72,6 @@ class Online_Texas_Core_Public {
 	 * @since    1.0.0
 	 */
 	public function enqueue_scripts() {
-		/**
-		 * This function is provided for demonstration purposes only.
-		 *
-		 * An instance of this class should be passed to the run() function
-		 * defined in Online_Texas_Core_Loader as all of the hooks are defined
-		 * in that particular class.
-		 *
-		 * The Online_Texas_Core_Loader will then create the relationship
-		 * between the defined hooks and the functions defined in this
-		 * class.
-		 */
-
 		wp_enqueue_script( 
 			$this->plugin_name, 
 			ONLINE_TEXAS_CORE_URL . 'public/js/online-texas-core-public.js', 
@@ -109,12 +85,15 @@ class Online_Texas_Core_Public {
 				'nonce' => wp_create_nonce('duplicate_admin_product_nonce'),
 			)
 		);
-
-
 	}
 
 	// Add the custom tab to vendor dashboard
 	public function add_admin_products_endpoint($query_vars) {
+		// Only add endpoint for vendors
+		if (!dokan_is_user_seller(get_current_user_id())) {
+			return $query_vars;
+		}
+
 		$query_vars['source'] = 'source';
 		$query_vars['paged'] = 'paged';
 		return $query_vars;
@@ -122,6 +101,11 @@ class Online_Texas_Core_Public {
 
 	// Add the tab to dashboard navigation
 	public function add_admin_products_tab($urls) {
+		// Only show tab for vendors
+		if (!dokan_is_user_seller(get_current_user_id())) {
+			return $urls;
+		}
+
 		$urls['source'] = array(
 			'title' => __('Source', 'online-texas-core'),
 			'icon'  => '<i class="fas fa-shopping-bag"></i>',
@@ -139,6 +123,11 @@ class Online_Texas_Core_Public {
 	// Handle the template for admin products page
 	public function load_admin_products_template( $query_vars ) {
 		if ( isset( $query_vars['source'] ) ) {
+			// Security check: Only vendors should access this template
+			if (!dokan_is_user_seller(get_current_user_id())) {
+				wp_die(__('Access denied - This feature is for vendors only.', 'online-texas-core'));
+			}
+
         	require_once ONLINE_TEXAS_CORE_PATH . 'public/partials/online-texas-core-dokan-admin-products-template.php';
         }
 	}
@@ -152,7 +141,7 @@ class Online_Texas_Core_Public {
 		
 		// Check if user is vendor
 		if (!dokan_is_user_seller(get_current_user_id())) {
-			wp_die('Access denied');
+			wp_send_json_error('Access denied');
 		}
 		
 		$product_id = intval($_POST['product_id']);
@@ -170,7 +159,39 @@ class Online_Texas_Core_Public {
 		if ($product_author != 0 && !in_array($product_author, $admin_user_ids)) {
 			wp_send_json_error('This is not an admin product');
 		}
+
+		// Check product availability for vendor
+		$available_for_vendors = get_post_meta($product_id, '_available_for_vendors', true);
+		$restricted_vendors = get_post_meta($product_id, '_restricted_vendors', true);
+		$current_vendor_id = get_current_user_id();
+
+		// If availability is not set, default based on course presence
+		if (empty($available_for_vendors)) {
+			$course_ids = fetch_course_from_product($product_id);
+			$available_for_vendors = !empty($course_ids) ? 'yes' : 'no';
+		}
+
+		// Check if vendor is allowed to duplicate this product
+		$can_duplicate = false;
+		switch ($available_for_vendors) {
+			case 'yes':
+				$can_duplicate = true;
+				break;
+			case 'selective':
+				$can_duplicate = is_array($restricted_vendors) && in_array($current_vendor_id, $restricted_vendors);
+				break;
+			case 'no':
+			default:
+				$can_duplicate = false;
+				break;
+		}
+
+		if (!$can_duplicate) {
+			wp_send_json_error('This product is not available for duplication');
+		}
+
 		$course_ids = fetch_course_from_product( $product_id );
+		
 		// Duplicate the product
 		$duplicated_product_id = create_single_vendor_product( $product_id, get_current_user_id(), $course_ids);
 		
@@ -192,7 +213,7 @@ class Online_Texas_Core_Public {
 		
 		// Check if user is vendor
 		if (!dokan_is_user_seller(get_current_user_id())) {
-			wp_die('Access denied');
+			wp_send_json_error('Access denied');
 		}
 		
 		$page = ( isset( $_POST['page'] ) ) ? intval( sanitize_text_field( wp_unslash( $_POST['page'] ) ) ) : 1;
@@ -227,8 +248,7 @@ class Online_Texas_Core_Public {
 				'pagination_html' => $pagination_html
 			));
 		}else{
-			wp_send_json_error('Failed to duplicate product');
+			wp_send_json_error('Failed to load products');
 		}                          
 	}
-	
 }

@@ -149,15 +149,22 @@ class Online_Texas_Core_Vendor_Sync {
 
 	/**
 	 * Create products for a vendor from all existing admin products.
+	 * Task 1.3: Check plugin and auto-creation options.
 	 *
 	 * @since 1.1.0
 	 * @param int $vendor_id The vendor user ID.
 	 * @return int|false Number of products created or false on failure.
 	 */
 	public function create_products_for_vendor( $vendor_id ) {
-		// Check if auto-creation is enabled
+		// Check if plugin functionality is enabled
 		$options = get_option( 'otc_options', array() );
-		if ( isset( $options['auto_create_for_new_vendors'] ) && ! $options['auto_create_for_new_vendors'] ) {
+		if ( empty( $options['plugin_enabled'] ) ) {
+			$this->log_debug( "Plugin functionality disabled for vendor: {$vendor_id}" );
+			return false;
+		}
+
+		// Check if auto-creation is enabled
+		if ( empty( $options['auto_create_for_new_vendors'] ) ) {
 			$this->log_debug( "Auto-create disabled for vendor: {$vendor_id}" );
 			return false;
 		}
@@ -186,6 +193,37 @@ class Online_Texas_Core_Vendor_Sync {
 				continue;
 			}
 
+			// Check product availability for this vendor
+			$available_for_vendors = get_post_meta( $admin_product_id, '_available_for_vendors', true );
+			$restricted_vendors = get_post_meta( $admin_product_id, '_restricted_vendors', true );
+
+			// If availability is not set, default based on course presence
+			if ( empty( $available_for_vendors ) ) {
+				$course_ids = $this->get_product_courses( $admin_product_id );
+				$available_for_vendors = ! empty( $course_ids ) ? 'yes' : 'no';
+			}
+
+			// Check if vendor is allowed to have this product
+			$can_create = false;
+			switch ( $available_for_vendors ) {
+				case 'yes':
+					$can_create = true;
+					break;
+				case 'selective':
+					$can_create = is_array( $restricted_vendors ) && in_array( $vendor_id, $restricted_vendors );
+					break;
+				case 'no':
+				default:
+					$can_create = false;
+					break;
+			}
+
+			if ( ! $can_create ) {
+				$this->log_debug( "Product {$admin_product_id} not available for vendor {$vendor_id}" );
+				$skipped_count++;
+				continue;
+			}
+
 			// Get courses for this product
 			$course_ids = $this->get_product_courses( $admin_product_id );
 
@@ -193,8 +231,8 @@ class Online_Texas_Core_Vendor_Sync {
 				continue;
 			}
 
-			// Create vendor product
-			$result = $this->admin->create_single_vendor_product( $admin_product_id, $vendor_id, $course_ids );
+			// Create vendor product using the existing function
+			$result = create_single_vendor_product( $admin_product_id, $vendor_id, $course_ids );
 
 			if ( $result ) {
 				$created_count++;

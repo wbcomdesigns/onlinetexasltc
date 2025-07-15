@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Template for displaying admin products in vendor dashboard
  * This template integrates with Dokan's dashboard layout
@@ -8,6 +7,11 @@
 // Don't load this template directly
 if (!defined('ABSPATH')) {
     exit;
+}
+
+// Security check: Only vendors should access this template
+if (!function_exists('dokan_is_user_seller') || !dokan_is_user_seller(get_current_user_id())) {
+    wp_die(__('Access denied - This feature is for vendors only.', 'online-texas-core'));
 }
 
 // Fix pagination query vars
@@ -52,22 +56,22 @@ $current_url = remove_query_arg('paged', $current_url);
             <div class="dokan-dashboard-header">
                 <h1 class="entry-title">
                     <i class="fas fa-shopping-bag"></i>
-                    <?php esc_html_e('Admin Products', 'dokan'); ?>
+                    <?php esc_html_e('Source Products', 'online-texas-core'); ?>
                 </h1>
             </div>
 
             <div class="online-texas-dashboard-content">
                 <div class="admin-products-container">
                     <div class="dokan-alert dokan-alert-info" style="margin-bottom: 20px;">
-                        <p><?php esc_html_e('Browse and duplicate admin products to add them to your store. Duplicated products will be saved as drafts for your review.', 'dokan'); ?></p>
+                        <p><?php esc_html_e('Browse and duplicate admin products to add them to your store. Duplicated products will be saved as drafts for your review.', 'online-texas-core'); ?></p>
                     </div>
 
                     <!-- Search and Filter Section -->
                     <div class="admin-products-filters">
                         <div class="admin-products-search-container">
-                            <input type="text" class="admin-products-search dokan-form-control" placeholder="<?php esc_attr_e('Search products...', 'dokan'); ?>">
+                            <input type="text" class="admin-products-search dokan-form-control" placeholder="<?php esc_attr_e('Search products...', 'online-texas-core'); ?>">
                             <button type="button" class="admin-products-search-btn dokan-btn dokan-btn-theme">
-                                <?php esc_html_e('Search', 'dokan'); ?>
+                                <?php esc_html_e('Search', 'online-texas-core'); ?>
                             </button>
                         </div>
                     </div>
@@ -77,12 +81,12 @@ $current_url = remove_query_arg('paged', $current_url);
                             <table class="dokan-table admin-products-table">
                                 <thead>
                                     <tr>
-                                        <th class="product-thumb"><?php esc_html_e('Image', 'dokan'); ?></th>
-                                        <th class="product-name"><?php esc_html_e('Product Name', 'dokan'); ?></th>
-                                        <th class="product-price"><?php esc_html_e('Price', 'dokan'); ?></th>
-                                        <th class="product-stock"><?php esc_html_e('Stock Status', 'dokan'); ?></th>
-                                        <th class="product-category"><?php esc_html_e('Categories', 'dokan'); ?></th>
-                                        <th class="product-action"><?php esc_html_e('Action', 'dokan'); ?></th>
+                                        <th class="product-thumb"><?php esc_html_e('Image', 'online-texas-core'); ?></th>
+                                        <th class="product-name"><?php esc_html_e('Product Name', 'online-texas-core'); ?></th>
+                                        <th class="product-price"><?php esc_html_e('Price', 'online-texas-core'); ?></th>
+                                        <th class="product-stock"><?php esc_html_e('Stock Status', 'online-texas-core'); ?></th>
+                                        <th class="product-category"><?php esc_html_e('Categories', 'online-texas-core'); ?></th>
+                                        <th class="product-action"><?php esc_html_e('Action', 'online-texas-core'); ?></th>
                                     </tr>
                                 </thead>
                                 <tbody class='dokan-admin-products-listing'>
@@ -123,8 +127,15 @@ $current_url = remove_query_arg('paged', $current_url);
                         <?php endif; ?>
 
                     <?php else : ?>
-                        <div class="dokan-error">
-                            <p><?php esc_html_e('No admin products found.', 'dokan'); ?></p>
+                        <div class="dokan-alert dokan-alert-info">
+                            <h4><?php esc_html_e('No Products Available', 'online-texas-core'); ?></h4>
+                            <p><?php esc_html_e('There are currently no admin products available for duplication. This could mean:', 'online-texas-core'); ?></p>
+                            <ul style="margin-left: 20px;">
+                                <li><?php esc_html_e('• No admin products have been created with linked courses', 'online-texas-core'); ?></li>
+                                <li><?php esc_html_e('• Admin has restricted access to available products', 'online-texas-core'); ?></li>
+                                <li><?php esc_html_e('• You may have already duplicated all available products', 'online-texas-core'); ?></li>
+                            </ul>
+                            <p><?php esc_html_e('Please contact your administrator if you believe this is an error.', 'online-texas-core'); ?></p>
                         </div>
                     <?php endif; ?>
 
