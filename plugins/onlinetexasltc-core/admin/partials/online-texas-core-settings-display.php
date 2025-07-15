@@ -42,7 +42,7 @@ if ( ! defined( 'WPINC' ) ) {
 				</tr>
 				<tr>
 					<th scope="row">
-						<label for="auto_create_for_new_vendors"><?php esc_html_e( 'Vendor Dashboard Access', 'online-texas-core' ); ?></label>
+						<label for="auto_create_for_new_vendors"><?php esc_html_e( 'Auto-Create Products', 'online-texas-core' ); ?></label>
 					</th>
 					<td>
 						<label>
@@ -54,15 +54,9 @@ if ( ! defined( 'WPINC' ) ) {
 						</p>
 					</td>
 				</tr>
-			</table>
-		</div>
-
-		<div class="card">
-			<h2><?php esc_html_e( 'Product Defaults', 'online-texas-core' ); ?></h2>
-			<table class="form-table">
 				<tr>
 					<th scope="row">
-						<label for="vendor_product_status"><?php esc_html_e( 'Vendor Product Status', 'online-texas-core' ); ?></label>
+						<label for="vendor_product_status"><?php esc_html_e( 'Default Product Status', 'online-texas-core' ); ?></label>
 					</th>
 					<td>
 						<select id="vendor_product_status" name="vendor_product_status">
@@ -81,12 +75,6 @@ if ( ! defined( 'WPINC' ) ) {
 						</p>
 					</td>
 				</tr>
-			</table>
-		</div>
-
-		<div class="card">
-			<h2><?php esc_html_e( 'Advanced Settings', 'online-texas-core' ); ?></h2>
-			<table class="form-table">
 				<tr>
 					<th scope="row">
 						<label for="debug_mode"><?php esc_html_e( 'Debug Mode', 'online-texas-core' ); ?></label>
@@ -104,91 +92,8 @@ if ( ! defined( 'WPINC' ) ) {
 			</table>
 		</div>
 
-		<div class="card">
-			<h2><?php esc_html_e( 'Product Availability Overview', 'online-texas-core' ); ?></h2>
-			<table class="widefat">
-				<thead>
-					<tr>
-						<th><?php esc_html_e( 'Availability Status', 'online-texas-core' ); ?></th>
-						<th><?php esc_html_e( 'Product Count', 'online-texas-core' ); ?></th>
-					</tr>
-				</thead>
-				<tbody>
-					<?php
-					// Get product availability statistics
-					global $wpdb;
-					
-					$all_vendors_count = $wpdb->get_var(
-						"SELECT COUNT(*) FROM {$wpdb->posts} p 
-						INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id 
-						WHERE p.post_type = 'product' 
-						AND p.post_status = 'publish'
-						AND pm.meta_key = '_available_for_vendors' 
-						AND pm.meta_value = 'yes'"
-					);
-					
-					$selective_count = $wpdb->get_var(
-						"SELECT COUNT(*) FROM {$wpdb->posts} p 
-						INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id 
-						WHERE p.post_type = 'product' 
-						AND p.post_status = 'publish'
-						AND pm.meta_key = '_available_for_vendors' 
-						AND pm.meta_value = 'selective'"
-					);
-					
-					$restricted_count = $wpdb->get_var(
-						"SELECT COUNT(*) FROM {$wpdb->posts} p 
-						INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id 
-						WHERE p.post_type = 'product' 
-						AND p.post_status = 'publish'
-						AND pm.meta_key = '_available_for_vendors' 
-						AND pm.meta_value = 'no'"
-					);
-					
-					$no_courses_count = $wpdb->get_var(
-						"SELECT COUNT(*) FROM {$wpdb->posts} p 
-						WHERE p.post_type = 'product' 
-						AND p.post_status = 'publish'
-						AND p.ID NOT IN (
-							SELECT post_id FROM {$wpdb->postmeta} 
-							WHERE meta_key IN ('_related_course', '_related_group')
-						)"
-					);
-					?>
-					<tr>
-						<td><span style="color: #28a745;">✓ Available to All Vendors</span></td>
-						<td><?php echo intval( $all_vendors_count ); ?></td>
-					</tr>
-					<tr>
-						<td><span style="color: #ffc107;">⚡ Available to Selected Vendors</span></td>
-						<td><?php echo intval( $selective_count ); ?></td>
-					</tr>
-					<tr>
-						<td><span style="color: #dc3545;">✗ Restricted from All Vendors</span></td>
-						<td><?php echo intval( $restricted_count ); ?></td>
-					</tr>
-					<tr>
-						<td><span style="color: #666;">— Products without Courses</span></td>
-						<td><?php echo intval( $no_courses_count ); ?></td>
-					</tr>
-				</tbody>
-			</table>
-		</div>
-
 		<?php submit_button( esc_html__( 'Save Settings', 'online-texas-core' ) ); ?>
 	</form>
-
-	<div class="card">
-		<h2><?php esc_html_e( 'Quick Actions', 'online-texas-core' ); ?></h2>
-		<p>
-			<a href="<?php echo esc_url( admin_url( 'admin.php?page=online-texas-core' ) ); ?>" class="button button-secondary">
-				<?php esc_html_e( 'View Dashboard', 'online-texas-core' ); ?>
-			</a>
-			<a href="<?php echo esc_url( admin_url( 'edit.php?post_type=product' ) ); ?>" class="button button-secondary">
-				<?php esc_html_e( 'Manage Products', 'online-texas-core' ); ?>
-			</a>
-		</p>
-	</div>
 
 	<?php
 	// Show debug log if enabled

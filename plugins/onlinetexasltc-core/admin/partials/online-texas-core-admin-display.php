@@ -44,37 +44,6 @@ if ( ! defined( 'WPINC' ) ) {
 			</div>
 		</div>
 
-		<!-- Quick Actions -->
-		<div class="card">
-			<h2><?php esc_html_e( 'Quick Actions', 'online-texas-core' ); ?></h2>
-			<div class="otc-actions-grid">
-				<div class="otc-action-item">
-					<button type="button" class="button button-primary button-large" id="otc-sync-all-vendors">
-						<?php esc_html_e( 'Sync All Vendors', 'online-texas-core' ); ?>
-					</button>
-					<p class="description">
-						<?php esc_html_e( 'Create missing vendor products for all active vendors.', 'online-texas-core' ); ?>
-					</p>
-				</div>
-				<div class="otc-action-item">
-					<a href="<?php echo esc_url( admin_url( 'admin.php?page=online-texas-core-settings' ) ); ?>" class="button button-secondary button-large">
-						<?php esc_html_e( 'Plugin Settings', 'online-texas-core' ); ?>
-					</a>
-					<p class="description">
-						<?php esc_html_e( 'Configure plugin behavior and options.', 'online-texas-core' ); ?>
-					</p>
-				</div>
-				<div class="otc-action-item">
-					<button type="button" class="button button-secondary button-large" id="otc-clear-debug-log">
-						<?php esc_html_e( 'Clear Debug Log', 'online-texas-core' ); ?>
-					</button>
-					<p class="description">
-						<?php esc_html_e( 'Clear all debug log entries.', 'online-texas-core' ); ?>
-					</p>
-				</div>
-			</div>
-		</div>
-
 		<!-- Manual Vendor Sync -->
 		<div class="card">
 			<h2><?php esc_html_e( 'Manual Vendor Sync', 'online-texas-core' ); ?></h2>
@@ -86,7 +55,16 @@ if ( ! defined( 'WPINC' ) ) {
 				if ( ! empty( $vendors['users'] ) ) :
 			?>
 			<div class="otc-vendor-sync-section">
-				<p><?php esc_html_e( 'Select specific vendors to sync with admin products:', 'online-texas-core' ); ?></p>
+				<p><?php esc_html_e( 'Manually sync specific vendors with admin products:', 'online-texas-core' ); ?></p>
+				
+				<div style="margin-bottom: 15px;">
+					<button type="button" class="button button-primary" id="otc-sync-all-vendors">
+						<?php esc_html_e( 'Sync All Vendors', 'online-texas-core' ); ?>
+					</button>
+					<p class="description" style="margin-top: 5px;">
+						<?php esc_html_e( 'Create missing vendor products for all active vendors.', 'online-texas-core' ); ?>
+					</p>
+				</div>
 				
 				<table class="wp-list-table widefat fixed striped">
 					<thead>
@@ -166,6 +144,11 @@ if ( ! defined( 'WPINC' ) ) {
 				</div>
 				<?php endforeach; ?>
 			</div>
+			<p>
+				<button type="button" class="button" id="otc-clear-debug-log">
+					<?php esc_html_e( 'Clear Debug Log', 'online-texas-core' ); ?>
+				</button>
+			</p>
 		</div>
 		<?php 
 			endif;
@@ -234,10 +217,10 @@ jQuery(document).ready(function($) {
 			button.prop('disabled', true).text('<?php echo esc_js( __( 'Syncing...', 'online-texas-core' ) ); ?>');
 			$('#otc-loading-overlay').show();
 			
-			$.post(otc_ajax.ajax_url, {
+			$.post(ajaxurl, {
 				action: 'otc_manual_vendor_sync',
 				vendor_id: 'all',
-				nonce: otc_ajax.nonce
+				nonce: '<?php echo wp_create_nonce( 'otc_nonce' ); ?>'
 			}, function(response) {
 				if (response.success) {
 					alert(response.data.message);
@@ -260,10 +243,10 @@ jQuery(document).ready(function($) {
 		
 		button.prop('disabled', true).text('<?php echo esc_js( __( 'Syncing...', 'online-texas-core' ) ); ?>');
 		
-		$.post(otc_ajax.ajax_url, {
+		$.post(ajaxurl, {
 			action: 'otc_manual_vendor_sync',
 			vendor_id: vendorId,
-			nonce: otc_ajax.nonce
+			nonce: '<?php echo wp_create_nonce( 'otc_nonce' ); ?>'
 		}, function(response) {
 			if (response.success) {
 				alert(response.data.message);
@@ -282,9 +265,9 @@ jQuery(document).ready(function($) {
 			
 			button.prop('disabled', true);
 			
-			$.post(otc_ajax.ajax_url, {
+			$.post(ajaxurl, {
 				action: 'otc_clear_debug_log',
-				nonce: otc_ajax.nonce
+				nonce: '<?php echo wp_create_nonce( 'otc_nonce' ); ?>'
 			}, function(response) {
 				if (response.success) {
 					$('.otc-debug-log').html('<p><?php echo esc_js( __( 'Debug log cleared.', 'online-texas-core' ) ); ?></p>');

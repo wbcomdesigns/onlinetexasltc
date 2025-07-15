@@ -1,183 +1,213 @@
-(function( $ ) {
-	'use strict';
+(function($) {
+    'use strict';
 
-	/**
-	 * All of the code for your public-facing JavaScript source
-	 * should reside in this file.
-	 *
-	 * Note: It has been assumed you will write jQuery code here, so the
-	 * $ function reference has been prepared for usage within the scope
-	 * of this function.
-	 *
-	 * This enables you to define handlers, for when the DOM is ready:
-	 *
-	 * $(function() {
-	 *
-	 * });
-	 *
-	 * When the window is loaded:
-	 *
-	 * $( window ).load(function() {
-	 *
-	 * });
-	 *
-	 * ...and/or other possibilities.
-	 *
-	 * Ideally, it is not considered best practise to attach more than a
-	 * single DOM-ready or window-load handler for a particular page.
-	 * Although scripts in the WordPress core, Plugins and Themes may be
-	 * practising this, we should strive to set a better example in our own work.
-	 */
+    // Global flag to prevent multiple initializations
+    if (window.onlineTexasCoreLoaded) {
+        return;
+    }
+    window.onlineTexasCoreLoaded = true;
 
+    $(document).ready(function() {
+        console.log('Online Texas Core: Initializing...');
 
-	/**
- * JavaScript for Admin Products functionality
- * Save this file as: admin-products.js
- */
-
-jQuery(document).ready(function($) {
-    // Handle duplicate button clicks
-    $(document).on('click','.duplicate-btn', function(e) {
-        e.preventDefault();
-        
-        const $button = $(this);
-        const productId = $button.data('product-id');
-        const productName = $button.data('product-name');
-        
-        // Show confirmation dialog
-        if (!confirm('Are you sure you want to duplicate"' + productName + '"?')) {
-            return;
-        }
-        
-        duplicateProduct(productId, $button);
-    });
-    
-    // Search functionality
-    $('.admin-products-search').on('keyup', function() {
-        const searchTerm = $(this).val().toLowerCase();
-        filterProducts(searchTerm);
-    });
-    
-    $('.admin-products-search-btn').on('click', function() {
-        const searchTerm = $('.admin-products-search').val().toLowerCase();
-        filterProducts(searchTerm);
-    });
-
-	 // Handle pagination clicks
-    $(document).on('click','.dokan-pagination a', function(e) {
-        e.preventDefault();
-        var page = $(this).html();
-		var $this = $(this);
-         $.ajax({
-			url: dokan.ajaxurl,
-			type: 'POST',
-			data: {
-				action: 'fetch_products_lists',
-				page: page,
-				nonce: online_texas.nonce,
-			},
-			success: function(response) {
-				if (response.success) {
-					$('.dokan-admin-products-listing').html(response.data.products_listing);
-					$('.dokan-pagination').html(response.data.pagination_html);
-				} else {
-					dokan_show_error_message('Error: ' + response.data);
-					resetButton($button, originalHtml);
-				}
-			},
-			error: function() {
-				dokan_show_error_message('An error occurred. Please try again.');
-				resetButton($button, originalHtml);
-			}
-		});
-    });
-
-});
-
-function duplicateProduct(productId, $button) {
-    const originalHtml = $button.html();
-    
-    // Update button state
-    $button.prop('disabled', true)
-           .html('<i class="fas fa-spinner fa-spin"></i>Duplicating...');
-    
-    // Make AJAX request
-    $.ajax({
-        url: dokan.ajaxurl,
-        type: 'POST',
-        data: {
-            action: 'duplicate_admin_product',
-            product_id: productId,
-            nonce: online_texas.nonce,
-        },
-        success: function(response) {
-            if (response.success) {
-                // Show success message
-                dokan_show_success_message('Product duplicated successfully! Check your Products page.');
-                
-                // Update button
-                $button.removeClass('dokan-btn-theme')
-                       .addClass('dokan-btn-success')
-                       .html('<i class="fas fa-check"></i>Duplicated');
-                
-                // Reset button after 3 seconds
-                
-            } else {
-                dokan_show_error_message('Error: ' + response.data);
-                resetButton($button, originalHtml);
+        // Single event delegation for duplicate buttons
+        $(document).on('click', '.duplicate-btn', function(e) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            
+            const $button = $(this);
+            
+            // Prevent multiple clicks on same button
+            if ($button.hasClass('processing') || $button.prop('disabled')) {
+                console.log('Button already processing, ignoring click');
+                return false;
             }
-        },
-        error: function() {
-            dokan_show_error_message('An error occurred. Please try again.');
-            resetButton($button, originalHtml);
-        }
+            
+            const productId = $button.data('product-id');
+            const productName = $button.data('product-name') || 'this product';
+            
+            console.log('Duplicate button clicked for product:', productId);
+            
+            // Single confirmation dialog
+            if (!confirm('Are you sure you want to duplicate "' + productName + '"?')) {
+                return false;
+            }
+            
+            // Immediately mark as processing
+            $button.addClass('processing').prop('disabled', true);
+            
+            duplicateProduct(productId, $button);
+            return false;
+        });
+
+        // Search functionality  
+        $(document).on('keyup', '.admin-products-search', function() {
+            const searchTerm = $(this).val().toLowerCase();
+            filterProducts(searchTerm);
+        });
+
+        // Pagination
+        $(document).on('click', '.dokan-pagination a', function(e) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            
+            const $link = $(this);
+            const page = $link.text().trim();
+            
+            // Only process numeric pages
+            if (!/^\d+$/.test(page)) {
+                return false;
+            }
+            
+            if ($('.dokan-pagination').hasClass('loading')) {
+                return false;
+            }
+            
+            $('.dokan-pagination').addClass('loading');
+            loadProductsPage(page);
+            return false;
+        });
+
+        console.log('Online Texas Core: Initialized successfully');
     });
-}
 
-function resetButton($button, originalHtml) {
-    $button.prop('disabled', false).html(originalHtml);
-}
-
-function filterProducts(searchTerm) {
-    $('.admin-products-table tbody tr').each(function() {
-        const productName = $(this).find('.product-name').text().toLowerCase();
-        const categories = $(this).find('.product-category').text().toLowerCase();
+    function duplicateProduct(productId, $button) {
+        const originalHtml = $button.html();
         
-        if (productName.includes(searchTerm) || categories.includes(searchTerm)) {
-            $(this).show();
-        } else {
-            $(this).hide();
-        }
-    });
-}
+        console.log('Starting duplication for product:', productId);
+        
+        // Update button immediately
+        $button.html('<i class="fas fa-spinner fa-spin"></i> Duplicating...')
+               .removeClass('dokan-btn-theme')
+               .addClass('dokan-btn-secondary');
+        
+        // Single AJAX request with proper error handling
+        $.ajax({
+            url: online_texas.ajaxurl,
+            type: 'POST',
+            timeout: 30000,
+            data: {
+                action: 'duplicate_admin_product',
+                product_id: productId,
+                nonce: online_texas.nonce
+            },
+            success: function(response) {
+                console.log('AJAX Response:', response);
+                
+                if (response && response.success) {
+                    showNotification('Product duplicated successfully!', 'success');
+                    
+                    // Update button to success state
+                    $button.removeClass('dokan-btn-secondary')
+                           .addClass('dokan-btn-success')
+                           .html('<i class="fas fa-check"></i> Duplicated')
+                           .prop('disabled', true);
+                    
+                    // Update the action cell to show "Already Duplicated"
+                    $button.closest('td').html('<span class="dokan-text-muted">Already Duplicated</span>');
+                    
+                } else {
+                    const errorMsg = response && response.data ? response.data : 'Unknown error';
+                    showNotification('Error: ' + errorMsg, 'error');
+                    resetButton($button, originalHtml);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.log('AJAX Error:', {xhr, status, error});
+                
+                let errorMsg = 'Request failed. Please try again.';
+                if (status === 'timeout') {
+                    errorMsg = 'Request timed out. Please try again.';
+                } else if (xhr.responseJSON && xhr.responseJSON.data) {
+                    errorMsg = xhr.responseJSON.data;
+                }
+                
+                showNotification(errorMsg, 'error');
+                resetButton($button, originalHtml);
+            },
+            complete: function() {
+                console.log('AJAX request completed');
+                // Always remove processing class
+                $button.removeClass('processing');
+            }
+        });
+    }
 
-// Helper functions for notifications (using Dokan's notification system)
-function dokan_show_success_message(message) {
-    $('.dokan-admin-products-wrap').prepend(
-        '<div class="dokan-alert dokan-alert-success">' +
-        '<button type="button" class="dokan-close" data-dismiss="alert">&times;</button>' +
-        message +
-        '</div>'
-    );
-    
-    // Auto-hide after 5 seconds
-    setTimeout(function() {
-        $('.dokan-alert-success').fadeOut();
-    }, 5000);
-}
+    function loadProductsPage(page) {
+        $.ajax({
+            url: online_texas.ajaxurl,
+            type: 'POST',
+            timeout: 15000,
+            data: {
+                action: 'fetch_products_lists',
+                page: page,
+                nonce: online_texas.nonce
+            },
+            success: function(response) {
+                if (response && response.success) {
+                    $('.dokan-admin-products-listing').html(response.data.products_listing);
+                    $('.dokan-pagination').html(response.data.pagination_html);
+                } else {
+                    showNotification('Failed to load products', 'error');
+                }
+            },
+            error: function() {
+                showNotification('Failed to load products. Please refresh the page.', 'error');
+            },
+            complete: function() {
+                $('.dokan-pagination').removeClass('loading');
+            }
+        });
+    }
 
-function dokan_show_error_message(message) {
-    $('.dokan-admin-products-wrap').prepend(
-        '<div class="dokan-alert dokan-alert-danger">' +
-        '<button type="button" class="dokan-close" data-dismiss="alert">&times;</button>' +
-        message +
-        '</div>'
-    );
-    
-    // Auto-hide after 5 seconds
-    setTimeout(function() {
-        $('.dokan-alert-danger').fadeOut();
-    }, 5000);
-}
+    function resetButton($button, originalHtml) {
+        $button.removeClass('processing dokan-btn-secondary dokan-btn-success')
+               .addClass('dokan-btn-theme')
+               .html(originalHtml)
+               .prop('disabled', false);
+    }
 
-})( jQuery );
+    function filterProducts(searchTerm) {
+        $('.admin-products-table tbody tr').each(function() {
+            const $row = $(this);
+            const productName = $row.find('.product-name').text().toLowerCase();
+            const categories = $row.find('.product-category').text().toLowerCase();
+            
+            if (productName.includes(searchTerm) || categories.includes(searchTerm)) {
+                $row.show();
+            } else {
+                $row.hide();
+            }
+        });
+    }
+
+    function showNotification(message, type) {
+        // Remove existing notifications
+        $('.dokan-alert').remove();
+        
+        const alertClass = type === 'success' ? 'dokan-alert-success' : 'dokan-alert-danger';
+        const $notification = $(
+            '<div class="dokan-alert ' + alertClass + '">' +
+            '<button type="button" class="dokan-close">&times;</button>' +
+            message +
+            '</div>'
+        );
+        
+        $('.dokan-admin-products-wrap').prepend($notification);
+        
+        // Auto-hide after 5 seconds
+        setTimeout(function() {
+            $notification.fadeOut(500, function() {
+                $(this).remove();
+            });
+        }, 5000);
+        
+        // Manual close
+        $notification.find('.dokan-close').on('click', function() {
+            $notification.fadeOut(500, function() {
+                $(this).remove();
+            });
+        });
+    }
+
+})(jQuery);
