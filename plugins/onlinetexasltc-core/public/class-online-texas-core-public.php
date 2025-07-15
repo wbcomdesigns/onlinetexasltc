@@ -12,7 +12,7 @@
 /**
  * The public-facing functionality of the plugin.
  *
- * Defines the plugin name, version, and two examples hooks for how to
+ * Defines the plugin name, version, and hooks for how to
  * enqueue the public-facing stylesheet and JavaScript.
  *
  * @package    Online_Texas_Core
@@ -49,6 +49,23 @@ class Online_Texas_Core_Public {
 	public function __construct( $plugin_name, $version ) {
 		$this->plugin_name = $plugin_name;
 		$this->version = $version;
+		
+		// Ensure required functions are loaded
+		$this->load_required_functions();
+	}
+
+	/**
+	 * Load all required functions to ensure AJAX compatibility.
+	 *
+	 * @since 1.1.0
+	 */
+	private function load_required_functions() {
+		if (!function_exists('create_single_vendor_product')) {
+			$functions_file = ONLINE_TEXAS_CORE_PATH . 'includes/online-texas-general-functions.php';
+			if (file_exists($functions_file)) {
+				require_once $functions_file;
+			}
+		}
 	}
 
 	/**
@@ -87,10 +104,61 @@ class Online_Texas_Core_Public {
 		);
 	}
 
-	// Add the custom tab to vendor dashboard
+	/**
+	 * Check if user has admin role.
+	 *
+	 * @since 1.1.0
+	 * @param int $user_id User ID to check (optional, defaults to current user).
+	 * @return bool True if user has admin role, false otherwise.
+	 */
+	private function user_has_admin_role($user_id = null) {
+		if (!$user_id) {
+			$user_id = get_current_user_id();
+		}
+		
+		$user = get_user_by('ID', $user_id);
+		if (!$user) {
+			return false;
+		}
+		
+		return in_array('administrator', $user->roles);
+	}
+
+	/**
+	 * Check if user should see vendor features.
+	 * Only show for sellers who are NOT administrators.
+	 *
+	 * @since 1.1.0
+	 * @return bool True if user should see vendor features, false otherwise.
+	 */
+	private function should_show_vendor_features() {
+		// Must be logged in
+		if (!is_user_logged_in()) {
+			return false;
+		}
+		
+		// Must NOT be an administrator
+		if ($this->user_has_admin_role()) {
+			return false;
+		}
+		
+		// Must be a Dokan seller
+		if (!function_exists('dokan_is_user_seller') || !dokan_is_user_seller(get_current_user_id())) {
+			return false;
+		}
+		
+		return true;
+	}
+
+	/**
+	 * Add the custom tab to vendor dashboard endpoint.
+	 *
+	 * @since 1.0.0
+	 * @param array $query_vars Current query vars.
+	 * @return array Modified query vars.
+	 */
 	public function add_admin_products_endpoint($query_vars) {
-		// Only add endpoint for vendors
-		if (!dokan_is_user_seller(get_current_user_id())) {
+		if (!$this->should_show_vendor_features()) {
 			return $query_vars;
 		}
 
@@ -99,10 +167,15 @@ class Online_Texas_Core_Public {
 		return $query_vars;
 	}
 
-	// Add the tab to dashboard navigation
+	/**
+	 * Add the tab to dashboard navigation.
+	 *
+	 * @since 1.0.0
+	 * @param array $urls Current dashboard URLs.
+	 * @return array Modified dashboard URLs.
+	 */
 	public function add_admin_products_tab($urls) {
-		// Only show tab for vendors
-		if (!dokan_is_user_seller(get_current_user_id())) {
+		if (!$this->should_show_vendor_features()) {
 			return $urls;
 		}
 
@@ -112,62 +185,121 @@ class Online_Texas_Core_Public {
 			'url'   => dokan_get_navigation_url('source'),
 			'pos'   => 20
 		);
+		
 		return $urls;
 	}
 
-	// Add rewrite rule for the endpoint
+	/**
+	 * Add rewrite rule for the endpoint.
+	 *
+	 * @since 1.0.0
+	 */
 	public function add_admin_products_rewrite_rule() {
 		add_rewrite_endpoint('source', EP_PAGES);
 	}
 
-	// Handle the template for admin products page
+	/**
+	 * Handle the template for admin products page.
+	 *
+	 * @since 1.0.0
+	 * @param array $query_vars Current query vars.
+	 */
 	public function load_admin_products_template( $query_vars ) {
 		if ( isset( $query_vars['source'] ) ) {
-			// Security check: Only vendors should access this template
-			if (!dokan_is_user_seller(get_current_user_id())) {
-				wp_die(__('Access denied - This feature is for vendors only.', 'online-texas-core'));
+			// Security check
+			if (!$this->should_show_vendor_features()) {
+				wp_die(__('Access denied - This feature is for vendors only, not administrators.', 'online-texas-core'));
 			}
+
+			// Ensure functions are loaded
+			$this->load_required_functions();
 
         	require_once ONLINE_TEXAS_CORE_PATH . 'public/partials/online-texas-core-dokan-admin-products-template.php';
         }
 	}
 
-	// Handle AJAX request for duplicating products
+	/**
+	 * Handle AJAX request for duplicating products.
+	 *
+	 * @since 1.0.0
+	 */
 	public function handle_duplicate_admin_product() {
+		// Ensure functions are loaded
+		$this->load_required_functions();
+		
+		// Security check
+		if (!$this->should_show_vendor_features()) {
+			wp_send_json_error('Access denied - This feature is for vendors only, not administrators');
+		}
+
 		// Verify nonce
 		if (!wp_verify_nonce($_POST['nonce'], 'duplicate_admin_product_nonce')) {
-			wp_die('Security check failed');
-		}
-		
-		// Check if user is vendor
-		if (!dokan_is_user_seller(get_current_user_id())) {
-			wp_send_json_error('Access denied');
+			wp_send_json_error('Security check failed');
 		}
 		
 		$product_id = intval($_POST['product_id']);
+		$current_vendor_id = get_current_user_id();
+		
+		// Validate product exists
+		if (!$product_id || !get_post($product_id)) {
+			wp_send_json_error('Invalid product ID');
+		}
+		
+		// CRITICAL: Check for recent duplicate attempts (prevent double-click/rapid requests)
+		$duplicate_lock_key = 'duplicate_lock_' . $current_vendor_id . '_' . $product_id;
+		if (get_transient($duplicate_lock_key)) {
+			wp_send_json_error('Please wait before attempting to duplicate this product again');
+		}
+		
+		// Set a 10-second lock to prevent rapid duplicate attempts
+		set_transient($duplicate_lock_key, true, 10);
+		
 		$original_product = wc_get_product($product_id);
 		
 		if (!$original_product) {
+			delete_transient($duplicate_lock_key); // Clean up lock on error
 			wp_send_json_error('Product not found');
 		}
 		
-		// Check if product belongs to admin (user_id = 0 or admin user)
+		// Check if product belongs to admin (using role-based check)
 		$product_author = get_post_field('post_author', $product_id);
-		$admin_users = get_users(array('role' => 'administrator'));
-		$admin_user_ids = wp_list_pluck($admin_users, 'ID');
+		$product_author_user = get_user_by('ID', $product_author);
 		
-		if ($product_author != 0 && !in_array($product_author, $admin_user_ids)) {
+		$is_admin_product = false;
+		if ($product_author == 0) {
+			$is_admin_product = true;
+		} elseif ($product_author_user && in_array('administrator', $product_author_user->roles)) {
+			$is_admin_product = true;
+		}
+		
+		if (!$is_admin_product) {
+			delete_transient($duplicate_lock_key);
 			wp_send_json_error('This is not an admin product');
+		}
+
+		// CRITICAL: Check if THIS VENDOR already duplicated this product
+		$existing_duplicate = get_posts(array(
+			'post_type' => 'product',
+			'author' => $current_vendor_id,
+			'meta_key' => '_parent_product_id',
+			'meta_value' => $product_id,
+			'posts_per_page' => 1,
+			'fields' => 'ids',
+			'post_status' => 'any' // Check all statuses
+		));
+
+		if (!empty($existing_duplicate)) {
+			delete_transient($duplicate_lock_key);
+			wp_send_json_error('You have already duplicated this product');
 		}
 
 		// Check product availability for vendor
 		$available_for_vendors = get_post_meta($product_id, '_available_for_vendors', true);
 		$restricted_vendors = get_post_meta($product_id, '_restricted_vendors', true);
-		$current_vendor_id = get_current_user_id();
 
 		// If availability is not set, default based on course presence
 		if (empty($available_for_vendors)) {
-			$course_ids = fetch_course_from_product($product_id);
+			$course_ids = $this->get_product_courses($product_id);
 			$available_for_vendors = !empty($course_ids) ? 'yes' : 'no';
 		}
 
@@ -187,38 +319,122 @@ class Online_Texas_Core_Public {
 		}
 
 		if (!$can_duplicate) {
+			delete_transient($duplicate_lock_key);
 			wp_send_json_error('This product is not available for duplication');
 		}
 
-		$course_ids = fetch_course_from_product( $product_id );
+		// Get course IDs
+		$course_ids = $this->get_product_courses($product_id);
+		
+		if (empty($course_ids)) {
+			delete_transient($duplicate_lock_key);
+			wp_send_json_error('No courses found for this product');
+		}
+		
+		// FINAL CHECK: Double-check for duplicates just before creation
+		$final_duplicate_check = get_posts(array(
+			'post_type' => 'product',
+			'author' => $current_vendor_id,
+			'meta_key' => '_parent_product_id',
+			'meta_value' => $product_id,
+			'posts_per_page' => 1,
+			'fields' => 'ids',
+			'post_status' => 'any'
+		));
+
+		if (!empty($final_duplicate_check)) {
+			delete_transient($duplicate_lock_key);
+			wp_send_json_error('Product was already duplicated during this request');
+		}
 		
 		// Duplicate the product
-		$duplicated_product_id = create_single_vendor_product( $product_id, get_current_user_id(), $course_ids);
-		
-		if ($duplicated_product_id) {
-			wp_send_json_success(array(
-				'message' => 'Product duplicated successfully',
-				'product_id' => $duplicated_product_id
-			));
-		} else {
-			wp_send_json_error('Failed to duplicate product');
+		try {
+			$duplicated_product_id = create_single_vendor_product($product_id, $current_vendor_id, $course_ids);
+			
+			if ($duplicated_product_id) {
+				// Success - extend the lock to prevent immediate re-duplication
+				set_transient($duplicate_lock_key, true, 60); // 1 minute lock after success
+				
+				wp_send_json_success(array(
+					'message' => 'Product duplicated successfully',
+					'product_id' => $duplicated_product_id,
+					'edit_url' => admin_url('post.php?post=' . $duplicated_product_id . '&action=edit')
+				));
+			} else {
+				delete_transient($duplicate_lock_key);
+				wp_send_json_error('Failed to duplicate product');
+			}
+		} catch (Exception $e) {
+			delete_transient($duplicate_lock_key);
+			wp_send_json_error('Failed to duplicate product: ' . $e->getMessage());
 		}
 	}
 
+	/**
+	 * Get courses linked to a product.
+	 *
+	 * @since 1.0.0
+	 * @param int $post_id The product ID.
+	 * @return array Array of course IDs.
+	 */
+	private function get_product_courses($post_id) {
+		$linked_course = get_post_meta($post_id, '_related_course', true);
+		if (!is_array($linked_course)) {
+			$linked_course = !empty($linked_course) ? array($linked_course) : array();
+		}
+
+		$linked_groups = get_post_meta($post_id, '_related_group', true);
+		
+		if (!empty($linked_groups) && is_array($linked_groups)) {
+			foreach ($linked_groups as $group_id) {
+				if (function_exists('learndash_group_enrolled_courses')) {
+					$group_courses = learndash_group_enrolled_courses($group_id);
+					
+					if (!empty($group_courses)) {
+						if (is_array($group_courses)) {
+							$linked_course = array_merge($linked_course, $group_courses);
+						} else {
+							$linked_course[] = $group_courses;
+						}
+					}
+				}
+			}
+			
+			$linked_course = array_unique(array_filter($linked_course));
+		}
+
+		return array_map('intval', array_filter($linked_course));
+	}
+
+	/**
+	 * Handle AJAX request for fetching products list.
+	 *
+	 * @since 1.0.0
+	 */
 	public function fetch_products_lists_callback() {
+		// Ensure functions are loaded
+		$this->load_required_functions();
+		
+		// Security check
+		if (!$this->should_show_vendor_features()) {
+			wp_send_json_error('Access denied - This feature is for vendors only, not administrators');
+		}
+
 		// Verify nonce
 		if (!wp_verify_nonce($_POST['nonce'], 'duplicate_admin_product_nonce')) {
-			wp_die('Security check failed');
-		}
-		
-		// Check if user is vendor
-		if (!dokan_is_user_seller(get_current_user_id())) {
-			wp_send_json_error('Access denied');
+			wp_send_json_error('Security check failed');
 		}
 		
 		$page = ( isset( $_POST['page'] ) ) ? intval( sanitize_text_field( wp_unslash( $_POST['page'] ) ) ) : 1;
 		$per_page = 20;
-		$products = get_admin_products_for_vendor($page, $per_page);
+		
+		// Get products using available function or inline method
+		if (function_exists('get_admin_products_for_vendor')) {
+			$products = get_admin_products_for_vendor($page, $per_page);
+		} else {
+			$products = $this->get_admin_products_inline($page, $per_page);
+		}
+		
 		ob_start();
         require_once ONLINE_TEXAS_CORE_PATH . 'public/partials/online-texas-products-html.php';
 		$products_listing = ob_get_clean();
@@ -248,7 +464,42 @@ class Online_Texas_Core_Public {
 				'pagination_html' => $pagination_html
 			));
 		}else{
-			wp_send_json_error('Failed to load products');
+			wp_send_json_error('No products found');
 		}                          
+	}
+
+	/**
+	 * Fallback method to get admin products for vendors.
+	 *
+	 * @since 1.1.0
+	 * @param int $paged Page number for pagination.
+	 * @param int $per_page Number of products per page.
+	 * @return WP_Query Query object with filtered products.
+	 */
+	private function get_admin_products_inline($paged = 1, $per_page = 20) {
+		// Get admin users
+		$admin_users = get_users(array('role' => 'administrator', 'fields' => 'ID'));
+		$admin_user_ids = !empty($admin_users) ? $admin_users : array(1);
+		
+		$args = array(
+			'post_type' => 'product',
+			'post_status' => 'publish',
+			'author__in' => $admin_user_ids,
+			'posts_per_page' => $per_page,
+			'paged' => $paged,
+			'meta_query' => array(
+				'relation' => 'OR',
+				array(
+					'key' => '_related_course',
+					'compare' => 'EXISTS'
+				),
+				array(
+					'key' => '_related_group',
+					'compare' => 'EXISTS'
+				)
+			)
+		);
+
+		return new WP_Query($args);
 	}
 }
