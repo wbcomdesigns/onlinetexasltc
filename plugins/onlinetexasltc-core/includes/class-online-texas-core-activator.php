@@ -88,6 +88,7 @@ class Online_Texas_Core_Activator {
 
 		// Log activation
 		error_log( 'Online Texas Core Plugin activated successfully.' );
+		self::create_uncanny_codes_code_meta_table();
 	}
 
 	/**
@@ -299,5 +300,25 @@ class Online_Texas_Core_Activator {
 
 		// Log upgrade
 		error_log( 'Online Texas Core Plugin upgraded to v1.1.0' );
+	}
+
+	/**
+	 * Create the uncanny_codes_code_meta table if it doesn't exist
+	 */
+	public static function create_uncanny_codes_code_meta_table() {
+		global $wpdb;
+		$table_name = $wpdb->prefix . 'uncanny_codes_code_meta';
+		$charset_collate = $wpdb->get_charset_collate();
+		$sql = "CREATE TABLE IF NOT EXISTS $table_name (
+			meta_id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+			code_id bigint(20) unsigned NOT NULL,
+			meta_key varchar(255) NOT NULL,
+			meta_value longtext NOT NULL,
+			PRIMARY KEY  (meta_id),
+			KEY code_id (code_id),
+			KEY meta_key (meta_key)
+		) $charset_collate;";
+		require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+		dbDelta( $sql );
 	}
 }

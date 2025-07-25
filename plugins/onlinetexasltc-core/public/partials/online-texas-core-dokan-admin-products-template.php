@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Template for displaying admin products in vendor dashboard
  *
@@ -17,38 +18,40 @@ if (!defined('ABSPATH')) {
 /**
  * Check if user has admin role
  */
-function otc_user_has_admin_role($user_id = null) {
+function otc_user_has_admin_role($user_id = null)
+{
     if (!$user_id) {
         $user_id = get_current_user_id();
     }
-    
+
     $user = get_user_by('ID', $user_id);
     if (!$user) {
         return false;
     }
-    
+
     return in_array('administrator', $user->roles);
 }
 
 /**
  * Check if user should see vendor features
  */
-function otc_should_show_vendor_features() {
+function otc_should_show_vendor_features()
+{
     // Must be logged in
     if (!is_user_logged_in()) {
         return false;
     }
-    
+
     // Must NOT be an administrator
     if (otc_user_has_admin_role()) {
         return false;
     }
-    
+
     // Must be a Dokan seller
     if (!function_exists('dokan_is_user_seller') || !dokan_is_user_seller(get_current_user_id())) {
         return false;
     }
-    
+
     return true;
 }
 
@@ -71,23 +74,49 @@ $per_page = 10;
 try {
     // Get all users with administrator role
     $admin_users = get_users(array(
-        'role' => 'administrator', 
+        'role' => 'administrator',
         'fields' => 'ID'
     ));
-    
+
     if (empty($admin_users)) {
         $admin_users = array(1); // Fallback to user ID 1
     }
 
-    
-    $products = get_admin_products_for_vendor( $paged, $per_page);
-    
+
+    $products = get_admin_products_for_vendor($paged, $per_page);
 } catch (Exception $e) {
     $products = new WP_Query(array('post_type' => 'product', 'posts_per_page' => 0));
 }
 
 // Get current URL for pagination
 $current_url = dokan_get_navigation_url('source');
+
+// Ensure required template functions are available
+if (! function_exists('esc_html')) {
+    function esc_html($s)
+    {
+        return htmlspecialchars($s, ENT_QUOTES);
+    }
+}
+if (! function_exists('esc_attr')) {
+    function esc_attr($s)
+    {
+        return htmlspecialchars($s, ENT_QUOTES);
+    }
+}
+if (! function_exists('get_the_post_thumbnail_url')) {
+    function get_the_post_thumbnail_url($id, $size = 'thumbnail')
+    {
+        return '';
+    }
+}
+if (! class_exists('WP_Query')) {
+    class WP_Query {}
+}
+
+$active_tab = isset($_GET['codes_tab']) && $_GET['codes_tab'] === 'codes' ? 'codes' : 'all';
+
+// Tab navigation
 ?>
 
 <div class="dokan-dashboard-wrap">
@@ -121,15 +150,120 @@ $current_url = dokan_get_navigation_url('source');
                     <?php esc_html_e('Source Products', 'online-texas-core'); ?>
                 </h1>
             </div>
-
+            <div class="dokan-dashboard-subnav" style="margin-bottom: 20px;">
+                <a href="?codes_tab=all" class="dokan-btn dokan-btn-sm <?php echo $active_tab === 'all' ? 'dokan-btn-theme' : 'dokan-btn-default'; ?>">All Products</a>
+                <a href="?codes_tab=codes" class="dokan-btn dokan-btn-sm <?php echo $active_tab === 'codes' ? 'dokan-btn-theme' : 'dokan-btn-default'; ?>">Codes Products</a>
+            </div>
             <div class="online-texas-dashboard-content">
                 <div class="admin-products-container">
                     <!-- Welcome message -->
-                    <div class="dokan-alert dokan-alert-info" style="margin-bottom: 20px;">
-                        <p><?php esc_html_e('Browse and duplicate admin products to add them to your store. Duplicated products will be saved as drafts for your review.', 'online-texas-core'); ?></p>
+                    <div class="dokan-alert dokan-alert-info" style="margin-bottom: 20px; display: flex; align-items: center;">
+                        <span class="dashicons dashicons-info" style="font-size: 22px; margin-right: 10px;"></span>
+                        <span><?php esc_html_e('Browse and duplicate admin products to add them to your store. Duplicated products will be saved as drafts for your review.', 'online-texas-core'); ?></span>
                     </div>
-
-                    <?php if ($products && $products->have_posts()) : ?>
+                    <?php
+                    // Product list
+                    if ($active_tab === 'codes') {
+                        $products = get_admin_automator_code_products_for_vendor(1, 20);
+                        echo '<h3 style="margin-bottom: 20px;">Codes Products</h3>';
+                        if ($products && count($products)) : ?>
+                            <div class="dokan-dashboard-product-listing">
+                                <table class="dokan-table admin-products-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="product-thumb"><?php esc_html_e('Image', 'online-texas-core'); ?></th>
+                                            <th class="product-name"><?php esc_html_e('Product Name', 'online-texas-core'); ?></th>
+                                            <th class="product-price"><?php esc_html_e('Price', 'online-texas-core'); ?></th>
+                                            <th class="product-action"><?php esc_html_e('Action', 'online-texas-core'); ?></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class='dokan-admin-products-listing'>
+                                        <?php
+                                        foreach ($products as $product_id) :
+                                            $product = wc_get_product($product_id);
+                                            if (!$product) continue;
+                                            $thumbnail = function_exists('get_the_post_thumbnail_url') ? get_the_post_thumbnail_url($product_id, 'thumbnail') : '';
+                                            $is_codes = $product->get_type() === 'automator_codes';
+                                            $already_duplicated = function_exists('is_duplicated') ? is_duplicated($product_id) : false;
+                                            // Find the vendor's duplicated product ID (if any)
+                                            $vendor_duplicate_id = false;
+                                            if ($already_duplicated) {
+                                                $vendor_id = get_current_user_id();
+                                                $dupes = get_posts(array(
+                                                    'post_type' => 'product',
+                                                    'author' => $vendor_id,
+                                                    'meta_key' => '_parent_product_id',
+                                                    'meta_value' => $product_id,
+                                                    'posts_per_page' => 1,
+                                                    'fields' => 'ids',
+                                                    'post_status' => 'any'
+                                                ));
+                                                if (!empty($dupes)) {
+                                                    $vendor_duplicate_id = $dupes[0];
+                                                }
+                                            }
+                                        ?>
+                                            <tr>
+                                                <td class="product-thumb">
+                                                    <?php if ($thumbnail) : ?>
+                                                        <img src="<?php echo esc_url($thumbnail); ?>" alt="<?php echo esc_attr($product->get_name()); ?>" class="product-thumbnail" style="width: 50px; height: 50px; object-fit: cover; border-radius: 3px;">
+                                                    <?php else : ?>
+                                                        <span class="dokan-product-placeholder" style="display: inline-block; width: 50px; height: 50px; background: #f0f0f0; text-align: center; line-height: 50px; border-radius: 3px;">
+                                                            <i class="fas fa-image"></i>
+                                                        </span>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td class="product-name">
+                                                    <strong><?php echo esc_html($product->get_name()); ?></strong>
+                                                    <span class="dokan-label dokan-label-warning" style="font-size:11px; margin-left: 8px;">Codes</span>
+                                                    <span class="dokan-label dokan-label-default" style="font-size:11px; margin-left: 4px;"><?php echo esc_html(ucfirst($product->get_status())); ?></span>
+                                                    <?php if ($product->get_short_description()) : ?>
+                                                        <div class="product-excerpt" style="font-size: 12px; color: #666; margin-top: 5px;">
+                                                            <?php echo wp_trim_words($product->get_short_description(), 10); ?>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td class="product-price">
+                                                    <?php if ($product->get_sale_price()) : ?>
+                                                        <del style="color: #999; font-size: 12px;"><?php echo wc_price($product->get_regular_price()); ?></del><br>
+                                                        <span style="color: #dc3545; font-weight: bold;"><?php echo wc_price($product->get_sale_price()); ?></span>
+                                                    <?php else : ?>
+                                                        <span style="font-weight: bold;"><?php echo wc_price($product->get_regular_price()); ?></span>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td class="product-action">
+                                                    <?php if (!$already_duplicated) { ?>
+                                                        <button class="dokan-btn dokan-btn-sm dokan-btn-theme duplicate-btn"
+                                                            data-product-id="<?php echo esc_attr($product_id); ?>"
+                                                            data-product-name="<?php echo esc_attr($product->get_name()); ?>"
+                                                            aria-label="Clone and generate codes for <?php echo esc_attr($product->get_name()); ?>"
+                                                            title="Clone & Generate Codes"
+                                                            style="background: #007cba; color: white; border: none; padding: 8px 12px; border-radius: 3px; cursor: pointer; font-size: 12px;">
+                                                            <i class="fas fa-copy"></i>
+                                                            <?php esc_html_e('Clone & Generate Codes', 'online-texas-core'); ?>
+                                                        </button>
+                                                    <?php } else { ?>
+                                                        <span class="dokan-text-muted" style="color: #28a745; font-size: 12px;">
+                                                            <i class="fas fa-check"></i> <?php esc_html_e('Already Duplicated', 'online-texas-core'); ?>
+                                                        </span>
+                                                    <?php } ?>
+                                                </td>
+                                            </tr>
+                                        <?php
+                                        endforeach;
+                                        ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php else : ?>
+                            <div class="dokan-alert dokan-alert-info">
+                                <h4><?php esc_html_e('No Codes Products Available', 'online-texas-core'); ?></h4>
+                                <p><?php esc_html_e('There are currently no codes products available for duplication. Please contact your administrator if you believe this is an error.', 'online-texas-core'); ?></p>
+                            </div>
+                        <?php endif;
+                    } else {
+                        $products_query = get_admin_products_for_vendor(1, 20);
+                         if ($products_query && $products_query->have_posts()) : ?>
                         <div class="dokan-dashboard-product-listing">
                             <table class="dokan-table admin-products-table">
                                 <thead>
@@ -142,19 +276,19 @@ $current_url = dokan_get_navigation_url('source');
                                 </thead>
                                 <tbody class='dokan-admin-products-listing'>
                                     <?php
-                                    while ($products->have_posts()) : 
+                                    while ($products->have_posts()) :
                                         $products->the_post();
                                         $product = wc_get_product(get_the_ID());
                                         $thumbnail = get_the_post_thumbnail_url(get_the_ID(), 'thumbnail');
-                                        
+
                                         // Check if already duplicated by current vendor
                                         $already_duplicated = function_exists('is_duplicated') ? is_duplicated(get_the_ID()) : false;
-                                        
+
                                         // Check if product is from admin
                                         $product_author = get_post_field('post_author', get_the_ID());
                                         $product_author_user = get_user_by('ID', $product_author);
-                                        $is_admin_product = ($product_author == 0) || 
-                                                          ($product_author_user && in_array('administrator', $product_author_user->roles));
+                                        $is_admin_product = ($product_author == 0) ||
+                                            ($product_author_user && in_array('administrator', $product_author_user->roles));
                                     ?>
                                         <tr>
                                             <td class="product-thumb">
@@ -250,8 +384,9 @@ $current_url = dokan_get_navigation_url('source');
                             </ul>
                             <p><?php esc_html_e('Please contact your administrator if you believe this is an error.', 'online-texas-core'); ?></p>
                         </div>
-                    <?php endif; ?>
-
+                    <?php endif;
+                    }
+                    ?>
                     <?php wp_reset_postdata(); ?>
                 </div>
             </div>
@@ -259,54 +394,54 @@ $current_url = dokan_get_navigation_url('source');
 
         <!-- JavaScript for duplicate functionality -->
         <script>
-        jQuery(document).ready(function($) {
-            // Handle duplicate button clicks
-            $(document).on('click', '.duplicate-btn', function(e) {
-                e.preventDefault();
-                
-                const $button = $(this);
-                const productId = $button.data('product-id');
-                const productName = $button.data('product-name');
-                const originalText = $button.html();
-                
-                // Show confirmation dialog
-                if (!confirm('<?php echo esc_js(__('Are you sure you want to duplicate', 'online-texas-core')); ?> "' + productName + '"?')) {
-                    return;
-                }
-                
-                // Update button state
-                $button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> <?php echo esc_js(__('Duplicating...', 'online-texas-core')); ?>');
-                
-                // Make AJAX request
-                $.ajax({
-                    url: '<?php echo admin_url('admin-ajax.php'); ?>',
-                    type: 'POST',
-                    data: {
-                        action: 'duplicate_admin_product',
-                        product_id: productId,
-                        nonce: '<?php echo wp_create_nonce('duplicate_admin_product_nonce'); ?>'
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            alert('<?php echo esc_js(__('Product duplicated successfully! Check your Products page.', 'online-texas-core')); ?>');
-                            $button.html('<i class="fas fa-check"></i> <?php echo esc_js(__('Duplicated', 'online-texas-core')); ?>')
-                                   .removeClass('dokan-btn-theme')
-                                   .css({
-                                       'background': '#28a745',
-                                       'border-color': '#28a745'
-                                   });
-                        } else {
-                            alert('<?php echo esc_js(__('Error:', 'online-texas-core')); ?> ' + response.data);
+            jQuery(document).ready(function($) {
+                // Handle duplicate button clicks
+                $(document).on('click', '.duplicate-btn', function(e) {
+                    e.preventDefault();
+
+                    const $button = $(this);
+                    const productId = $button.data('product-id');
+                    const productName = $button.data('product-name');
+                    const originalText = $button.html();
+
+                    // Show confirmation dialog
+                    if (!confirm('<?php echo esc_js(__('Are you sure you want to duplicate', 'online-texas-core')); ?> "' + productName + '"?')) {
+                        return;
+                    }
+
+                    // Update button state
+                    $button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> <?php echo esc_js(__('Duplicating...', 'online-texas-core')); ?>');
+
+                    // Make AJAX request
+                    $.ajax({
+                        url: '<?php echo admin_url('admin-ajax.php'); ?>',
+                        type: 'POST',
+                        data: {
+                            action: 'duplicate_admin_product',
+                            product_id: productId,
+                            nonce: '<?php echo wp_create_nonce('duplicate_admin_product_nonce'); ?>'
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                alert('<?php echo esc_js(__('Product duplicated successfully! Check your Products page.', 'online-texas-core')); ?>');
+                                $button.html('<i class="fas fa-check"></i> <?php echo esc_js(__('Duplicated', 'online-texas-core')); ?>')
+                                    .removeClass('dokan-btn-theme')
+                                    .css({
+                                        'background': '#28a745',
+                                        'border-color': '#28a745'
+                                    });
+                            } else {
+                                alert('<?php echo esc_js(__('Error:', 'online-texas-core')); ?> ' + response.data);
+                                $button.prop('disabled', false).html(originalText);
+                            }
+                        },
+                        error: function() {
+                            alert('<?php echo esc_js(__('An error occurred. Please try again.', 'online-texas-core')); ?>');
                             $button.prop('disabled', false).html(originalText);
                         }
-                    },
-                    error: function() {
-                        alert('<?php echo esc_js(__('An error occurred. Please try again.', 'online-texas-core')); ?>');
-                        $button.prop('disabled', false).html(originalText);
-                    }
+                    });
                 });
             });
-        });
         </script>
 
         <?php

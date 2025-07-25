@@ -102,7 +102,16 @@ class Online_Texas_Core_Admin {
 		// Get course count
 		$course_ids = fetch_course_from_product( $post->ID );
 		$has_courses = ! empty( $course_ids );
-		
+
+		// Get product type
+		$product_type = '';
+		if ( function_exists( 'wc_get_product' ) ) {
+			$product = wc_get_product( $post->ID );
+			if ( $product ) {
+				$product_type = $product->get_type();
+			}
+		}
+
 		// Get vendor product count
 		global $wpdb;
 		$vendor_count = $wpdb->get_var( $wpdb->prepare(
@@ -114,9 +123,13 @@ class Online_Texas_Core_Admin {
 			$post->ID
 		) );
 
-		// Set default based on course presence
+		// Set default based on course presence or automator_codes
 		if ( empty( $available_for_vendors ) ) {
-			$available_for_vendors = $has_courses ? 'yes' : 'no';
+			if ( $product_type === 'automator_codes' ) {
+				$available_for_vendors = 'yes';
+			} else {
+				$available_for_vendors = $has_courses ? 'yes' : 'no';
+			}
 		}
 
 		if ( ! is_array( $restricted_vendors ) ) {
@@ -125,8 +138,12 @@ class Online_Texas_Core_Admin {
 
 		?>
 		<div id="otc-vendor-availability-options">
-			<?php if ( $has_courses ) : ?>
-				<p><strong><?php esc_html_e( 'Linked Courses:', 'online-texas-core' ); ?></strong> <?php echo count( $course_ids ); ?></p>
+			<?php if ( $has_courses || $product_type === 'automator_codes' ) : ?>
+				<?php if ( $product_type === 'automator_codes' ) : ?>
+					<p><strong><?php esc_html_e( 'Codes Product:', 'online-texas-core' ); ?></strong> <?php esc_html_e( 'No course required.', 'online-texas-core' ); ?></p>
+				<?php else : ?>
+					<p><strong><?php esc_html_e( 'Linked Courses:', 'online-texas-core' ); ?></strong> <?php echo count( $course_ids ); ?></p>
+				<?php endif; ?>
 				<p><strong><?php esc_html_e( 'Vendor Products:', 'online-texas-core' ); ?></strong> <?php echo intval( $vendor_count ); ?></p>
 				
 				<p><label>

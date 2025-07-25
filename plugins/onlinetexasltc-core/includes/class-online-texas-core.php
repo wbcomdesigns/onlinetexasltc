@@ -78,6 +78,14 @@ class Online_Texas_Core {
 		$this->set_locale();
 		$this->define_admin_hooks();
 		$this->define_public_hooks();
+
+		// Load vendor codes module if present
+		if ( file_exists( ONLINE_TEXAS_CORE_PATH . 'includes/class-online-texas-vendor-codes.php' ) ) {
+			require_once ONLINE_TEXAS_CORE_PATH . 'includes/class-online-texas-vendor-codes.php';
+			if ( class_exists( 'Online_Texas_Vendor_Codes' ) ) {
+				Online_Texas_Vendor_Codes::instance();
+			}
+		}
 	}
 
 	/**

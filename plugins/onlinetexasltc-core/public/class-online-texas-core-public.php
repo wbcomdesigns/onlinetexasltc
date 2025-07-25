@@ -302,8 +302,12 @@ class Online_Texas_Core_Public {
 
 		// If availability is not set, default based on course presence
 		if (empty($available_for_vendors)) {
-			$course_ids = $this->get_product_courses($product_id);
-			$available_for_vendors = !empty($course_ids) ? 'yes' : 'no';
+			if ($original_product && $original_product->get_type() === 'automator_codes') {
+				$available_for_vendors = 'yes';
+			} else {
+				$course_ids = $this->get_product_courses($product_id);
+				$available_for_vendors = !empty($course_ids) ? 'yes' : 'no';
+			}
 		}
 
 		// Check if vendor is allowed to duplicate this product
@@ -327,11 +331,14 @@ class Online_Texas_Core_Public {
 		}
 
 		// Get course IDs
-		$course_ids = $this->get_product_courses($product_id);
-		
-		if (empty($course_ids)) {
-			delete_transient($duplicate_lock_key);
-			wp_send_json_error('No courses found for this product');
+		if ($original_product && $original_product->get_type() === 'automator_codes') {
+			$course_ids = [];
+		} else {
+			$course_ids = $this->get_product_courses($product_id);
+			if (empty($course_ids)) {
+				delete_transient($duplicate_lock_key);
+				wp_send_json_error('No courses found for this product');
+			}
 		}
 		
 		// FINAL CHECK: Double-check for duplicates just before creation
@@ -358,6 +365,52 @@ class Online_Texas_Core_Public {
 				// Success - extend the lock to prevent immediate re-duplication
 				set_transient($duplicate_lock_key, true, 60); // 1 minute lock after success
 				
+				// Prompt for batch size if product is automator_codes
+				$new_product_id = $duplicated_product_id;
+				$original_product_id = $product_id;
+				$product = wc_get_product( $new_product_id );
+				if ( $product && $product->get_type() === 'automator_codes' ) {
+					$batch_size = 10;
+					if ( isset( $_POST['vendor_code_batch_size'] ) ) {
+						$batch_size = max( 1, min( 20, intval( $_POST['vendor_code_batch_size'] ) ) );
+					}
+					// Auto-generate a code group for this vendor product
+					$vendor_id = get_current_user_id();
+					$group_args = [
+						'group-name'            => 'Vendor ' . $vendor_id . ' ' . current_time( 'mysql' ),
+						'coupon-for'            => 'automator',
+						'coupon-paid-unpaid'    => '',
+						'coupon-prefix'         => '',
+						'coupon-suffix'         => '',
+						'coupon-amount'         => $batch_size,
+						'coupon-max-usage'      => 1,
+						'coupon-dash'           => '',
+						'coupon-character-type' => [ 'numbers', 'uppercase-letters' ],
+						'expiry-date'           => '',
+						'expiry-time'           => '',
+						'coupon-courses'        => [],
+						'coupon-group'          => [],
+						'product_id'            => $new_product_id,
+					];
+					$group_id = \uncanny_learndash_codes\Database::add_code_group_batch( $group_args );
+					if ( $group_id ) {
+						$codes = [];
+						for ( $i = 0; $i < $batch_size; $i++ ) {
+							$codes[] = strtoupper( wp_generate_password( 10, false, false ) );
+						}
+						\uncanny_learndash_codes\Database::add_codes_to_batch( $group_id, $codes, [ 'generation_type' => 'manual', 'coupon_amount' => $batch_size ] );
+						// Link the group to the product (meta or as needed)
+						update_post_meta( $new_product_id, 'codes_group_name', $group_id );
+						// Assign _dokan_vendor_id meta to each code
+						if ( class_exists( 'Online_Texas_Vendor_Codes' ) ) {
+							$new_codes = \uncanny_learndash_codes\Database::get_coupons( $group_id );
+							foreach ( $new_codes as $code_obj ) {
+								Online_Texas_Vendor_Codes::add_code_meta( $code_obj->ID, '_dokan_vendor_id', $vendor_id );
+							}
+						}
+					}
+				}
+
 				wp_send_json_success(array(
 					'message' => 'Product duplicated successfully',
 					'product_id' => $duplicated_product_id,
@@ -517,18 +570,24 @@ class Online_Texas_Core_Public {
 
 	// Add My Courses to My Account menu
 	public function add_learndash_courses_menu($items) {
+		// Only show to users who are NOT admin, vendor, or instructor
+		$user_id = get_current_user_id();
+		$user = get_userdata($user_id);
+		$roles = (array) ($user ? $user->roles : array());
+		$is_admin = in_array('administrator', $roles);
+		$is_vendor = in_array('seller', $roles) || in_array('vendor', $roles) || (function_exists('dokan_is_user_seller') && dokan_is_user_seller($user_id));
+		$is_instructor = in_array('group_leader', $roles) || in_array('instructor', $roles);
+		if ($is_admin || $is_vendor || $is_instructor) {
+			return $items;
+		}
 		// Insert "My Courses" after "Dashboard" but before "Orders"
 		$new_items = array();
-		
 		foreach($items as $key => $item) {
 			$new_items[$key] = $item;
-			
-			// Add after dashboard
 			if($key === 'dashboard') {
 				$new_items['my-courses'] = __('My Courses', 'textdomain');
 			}
 		}
-		
 		return $new_items;
 	}
 
@@ -545,8 +604,18 @@ class Online_Texas_Core_Public {
 		echo '<div class="learndash-my-courses-wrapper">';
 		echo '<h3>' . __('My Courses', 'textdomain') . '</h3>';
 		
+			$user_id = get_current_user_id();
+		$user = get_userdata($user_id);
+		$roles = (array) ($user ? $user->roles : array());
+		$is_admin = in_array('administrator', $roles);
+		$is_vendor = in_array('seller', $roles) || in_array('vendor', $roles) || (function_exists('dokan_is_user_seller') && dokan_is_user_seller($user_id));
+		$is_instructor = in_array('group_leader', $roles) || in_array('instructor', $roles);
 		// Use LearnDash shortcode to display user's courses with progress bar
-		echo do_shortcode('[ld_course_list mycourses=“true” progress_bar=“true” num=“6” show_thumbnail=“true” col=“3”]');
+		if ($is_admin || $is_vendor || $is_instructor) {
+			echo do_shortcode('[ld_course_list mycourses="true" progress_bar="true" num="6" show_thumbnail="true" col="3"]');
+		}else{
+			echo do_shortcode('[ld_course_list mycourses="enrolled" progress_bar="true" num="6" show_thumbnail="true" col="3"]');
+		}
 		
 		echo '</div>';
 	}

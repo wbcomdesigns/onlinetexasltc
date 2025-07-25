@@ -95,8 +95,6 @@ function create_single_vendor_product( $admin_product_id, $vendor_id, $course_id
 		// Get vendor product status from options
 		$options = get_option( 'otc_options', array() );
 		$vendor_product_status = isset( $options['vendor_product_status'] ) ? $options['vendor_product_status'] : 'draft';
-		
-		// Validate status
 		$allowed_statuses = array( 'draft', 'pending', 'publish' );
 		if ( ! in_array( $vendor_product_status, $allowed_statuses, true ) ) {
 			$vendor_product_status = 'draft';
@@ -132,29 +130,41 @@ function create_single_vendor_product( $admin_product_id, $vendor_id, $course_id
 		delete_post_meta( $duplicated_product->get_id(), 'learndash_course_enrolled_courses' );
 		delete_post_meta( $duplicated_product->get_id(), 'learndash_group_enrolled_groups' );
 
-		// STEP 5: Create LearnDash group with product ID for URL and initial price
-		$group_id = create_learndash_group( $vendor_id, $course_ids, $vendor_product_title, $duplicated_product->get_id(), $admin_price );
-		if ( ! $group_id ) {
-			// Clean up on failure
-			wp_delete_post( $duplicated_product->get_id(), true );
-			throw new Exception( 'Failed to create LearnDash group for vendor product' );
+		// STEP 5: Create LearnDash group and set meta ONLY for non-automator_codes
+		if ( $admin_product->get_type() !== 'automator_codes' ) {
+			$group_id = create_learndash_group( $vendor_id, $course_ids, $vendor_product_title, $duplicated_product->get_id(), $admin_price );
+			if ( ! $group_id ) {
+				// Clean up on failure
+				wp_delete_post( $duplicated_product->get_id(), true );
+				throw new Exception( 'Failed to create LearnDash group for vendor product' );
+			}
+
+			// STEP 6: Save metadata - including the group association
+			$meta_data = array(
+				'_parent_product_id'              => $admin_product_id,
+				'_linked_ld_group_id'             => $group_id,
+				'_vendor_product_original_title'  => $admin_product->get_name(),
+				'_created_on'                     => current_time( 'mysql' ),
+				'_related_group'                  => array( $group_id ),
+				'learndash_group_enrolled_groups' => array( $group_id )
+			);
+
+			foreach ( $meta_data as $key => $value ) {
+				update_post_meta( $duplicated_product->get_id(), $key, $value );
+			}
+		} else {
+			// automator_codes: just set parent and original title meta
+			$meta_data = array(
+				'_parent_product_id'             => $admin_product_id,
+				'_vendor_product_original_title' => $admin_product->get_name(),
+				'_created_on'                    => current_time( 'mysql' ),
+			);
+			foreach ( $meta_data as $key => $value ) {
+				update_post_meta( $duplicated_product->get_id(), $key, $value );
+			}
 		}
 
-		// STEP 6: Save metadata - including the group association
-		$meta_data = array(
-			'_parent_product_id'              => $admin_product_id,
-			'_linked_ld_group_id'             => $group_id,
-			'_vendor_product_original_title'  => $admin_product->get_name(),
-			'_created_on'                     => current_time( 'mysql' ),
-			'_related_group'                  => array( $group_id ),
-			'learndash_group_enrolled_groups' => array( $group_id )
-		);
-
-		foreach ( $meta_data as $key => $value ) {
-			update_post_meta( $duplicated_product->get_id(), $key, $value );
-		}
-
-		log_debug( "Created vendor product ID: {$duplicated_product->get_id()} for vendor: {$vendor_id} with status: {$vendor_product_status}, LearnDash group: {$group_id} and initial price: {$admin_price}" );
+		log_debug( "Created vendor product ID: {$duplicated_product->get_id()} for vendor: {$vendor_id} with status: {$vendor_product_status}" . ($admin_product->get_type() !== 'automator_codes' ? ", LearnDash group: {$group_id}" : '') . " and initial price: {$admin_price}" );
 
 		return $duplicated_product->get_id();
 
@@ -425,7 +435,6 @@ function fetch_course_from_product( $post_id ) {
 function get_admin_products_for_vendor( $paged = 1, $per_page = 20 ) {
     // Get current vendor ID
     $vendor_id = get_current_user_id();
-    
     // Get all admin users
     $admin_users = get_users( array( 'role' => 'administrator' ) );
     $admin_user_ids = wp_list_pluck( $admin_users, 'ID' );
@@ -436,7 +445,7 @@ function get_admin_products_for_vendor( $paged = 1, $per_page = 20 ) {
         'post_status' => 'publish',
         'author__in' => $admin_user_ids,
         'posts_per_page' => $per_page,
-		'post__not_in' => $get_restricted_products,
+        'post__not_in' => $get_restricted_products,
         'paged' => $paged,
         'meta_query' => array(
             'relation' => 'AND',
@@ -454,9 +463,43 @@ function get_admin_products_for_vendor( $paged = 1, $per_page = 20 ) {
             )
         )
     );
-
     $products = new WP_Query( $args );
     return $products;
+}
+
+/**
+ * Get only automator_codes products for vendor cloning.
+ */
+function get_admin_automator_code_products_for_vendor( $paged = 1, $per_page = 20 ) {
+    $args = array(
+        'status' => 'publish',
+        'type'   => 'automator_codes',
+        'limit'  => $per_page,
+        'page'   => $paged,
+        'author' => get_admin_user_ids(),
+    );
+    $products = wc_get_products( $args );
+    $vendor_id = get_current_user_id();
+    $filtered = array();
+    foreach ( $products as $product ) {
+        $pid = $product->get_id();
+        $available = get_post_meta( $pid, '_available_for_vendors', true );
+        $restricted = get_post_meta( $pid, '_restricted_vendors', true );
+        if ( $available === 'no' ) {
+            continue;
+        }
+        if ( $available === 'selective' ) {
+            if ( ! is_array( $restricted ) ) {
+                $restricted = array();
+            }
+            if ( ! in_array( $vendor_id, $restricted ) ) {
+                continue;
+            }
+        }
+        // If available is 'yes' or empty, or selective and vendor is allowed
+        $filtered[] = $pid;
+    }
+    return $filtered;
 }
 
 /**
@@ -638,4 +681,16 @@ function user_has_group_access($user_id, $group_id) {
     }
     
     return false;
+}
+
+/**
+ * Get all admin user IDs.
+ * @return array
+ */
+function get_admin_user_ids() {
+    $admins = get_users( array(
+        'role'   => 'administrator',
+        'fields' => 'ID'
+    ) );
+    return $admins;
 }
