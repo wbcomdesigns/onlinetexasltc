@@ -423,19 +423,20 @@ function fetch_course_from_product( $post_id ) {
  * @return WP_Query Query object with filtered products.
  */
 function get_admin_products_for_vendor( $paged = 1, $per_page = 20 ) {
-	// Get current vendor ID
-	$vendor_id = get_current_user_id();
-	
-	// Get all admin users
+    // Get current vendor ID
+    $vendor_id = get_current_user_id();
+    
+    // Get all admin users
     $admin_users = get_users( array( 'role' => 'administrator' ) );
     $admin_user_ids = wp_list_pluck( $admin_users, 'ID' );
     $admin_user_ids[] = 0; // Include products with no author
-    
+    $get_restricted_products = get_user_meta($vendor_id, 'admin_restricted_products', true) ?? array();
     $args = array(
         'post_type' => 'product',
         'post_status' => 'publish',
         'author__in' => $admin_user_ids,
         'posts_per_page' => $per_page,
+		'post__not_in' => $get_restricted_products,
         'paged' => $paged,
         'meta_query' => array(
             'relation' => 'AND',
@@ -449,49 +450,6 @@ function get_admin_products_for_vendor( $paged = 1, $per_page = 20 ) {
                 array(
                     'key' => '_related_group',
                     'compare' => 'EXISTS'
-                )
-            ),
-            // New availability requirement
-            array(
-                'relation' => 'OR',
-                // Available to all vendors
-                array(
-                    'key' => '_available_for_vendors',
-                    'value' => 'yes',
-                    'compare' => '='
-                ),
-                // Available to selected vendors and vendor is in the list
-                array(
-                    'relation' => 'AND',
-                    array(
-                        'key' => '_available_for_vendors',
-                        'value' => 'selective',
-                        'compare' => '='
-                    ),
-                    array(
-                        'key' => '_restricted_vendors',
-                        'value' => serialize( strval( $vendor_id ) ),
-                        'compare' => 'LIKE'
-                    )
-                ),
-                // No availability setting but has courses (backward compatibility)
-                array(
-                    'relation' => 'AND',
-                    array(
-                        'key' => '_available_for_vendors',
-                        'compare' => 'NOT EXISTS'
-                    ),
-                    array(
-                        'relation' => 'OR',
-                        array(
-                            'key' => '_related_course',
-                            'compare' => 'EXISTS'
-                        ),
-                        array(
-                            'key' => '_related_group',
-                            'compare' => 'EXISTS'
-                        )
-                    )
                 )
             )
         )
@@ -561,4 +519,123 @@ function log_debug( $message, $type = 'debug' ) {
 	}
 
 	update_option( 'otc_debug_log', $log );
+}
+
+
+// Helper functions (add these to your class or include from the previous artifact)
+/**
+ * Get the specific group where user is enrolled and contains the course
+ */
+function get_user_course_group($user_id, $course_id) {
+    if (empty($user_id) || empty($course_id)) {
+        return null;
+    }
+    
+    // Get all groups where user is enrolled
+    $user_groups = learndash_get_users_group_ids($user_id);
+    
+    if (empty($user_groups)) {
+        return null;
+    }
+    
+    // Check each user group to see if it contains the course
+    $matching_group = null;
+    foreach ($user_groups as $group_id) {
+        $group_courses = learndash_group_enrolled_courses($group_id);
+        
+        if (in_array($course_id, $group_courses)) {
+            $matching_group = $group_id;
+            break; // Found the matching group
+        }
+    }
+    
+    if (!empty($matching_group)) {
+        return $matching_group;
+    }
+    
+    // Alternative method: Check if user has direct course access through a group
+    // This handles cases where the user might have course access but group relationship is different
+    if (empty($matching_group)) {
+        $all_groups_with_course = get_groups_containing_course($course_id);
+        
+        foreach ($all_groups_with_course as $group_id) {
+            // Check if user is actually a member of this group
+            if (function_exists('learndash_is_user_in_group')) {
+                if (learndash_is_user_in_group($user_id, $group_id)) {
+                    return $group_id;
+                }
+            } else {
+                // Fallback check
+                if (in_array($group_id, $user_groups)) {
+                    return $group_id;
+                }
+            }
+        }
+    }
+    
+    // Last resort: Check activity logs
+    $activity_group = get_user_course_group_from_activity($user_id, $course_id);
+    if (!empty($activity_group)) {
+        return $activity_group;
+    }
+    
+    return null;
+}
+
+function get_groups_containing_course($course_id) {
+    if (empty($course_id)) {
+        return array();
+    }
+    
+    // Use LearnDash function if available
+    if (function_exists('learndash_get_course_groups')) {
+        return learndash_get_course_groups($course_id);
+    }
+    
+    // Manual lookup
+    $groups = get_posts(array(
+        'post_type' => 'groups',
+        'posts_per_page' => -1,
+        'post_status' => 'publish',
+        'fields' => 'ids'
+    ));
+    
+    $course_groups = array();
+    foreach ($groups as $group_id) {
+        $group_courses = learndash_group_enrolled_courses($group_id);
+        if (in_array($course_id, $group_courses)) {
+            $course_groups[] = $group_id;
+        }
+    }
+    
+    return $course_groups;
+}
+
+/**
+ * Get groups containing a specific course
+ */
+function user_has_group_access($user_id, $group_id) {
+    if (empty($user_id) || empty($group_id)) {
+        return false;
+    }
+    
+    // Check if user is a group member
+    if (function_exists('learndash_is_user_in_group')) {
+        if (learndash_is_user_in_group($user_id, $group_id)) {
+            return true;
+        }
+    } else {
+        $user_groups = learndash_get_users_group_ids($user_id);
+        if (in_array($group_id, $user_groups)) {
+            return true;
+        }
+    }
+    
+    // Check if user is a group leader
+    $group_leaders = learndash_get_groups_administrators($group_id);
+    if (in_array($user_id, $group_leaders)) {
+        return true;
+    }
+    
+    return false;
 }

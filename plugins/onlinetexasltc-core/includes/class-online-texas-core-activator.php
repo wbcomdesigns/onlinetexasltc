@@ -81,6 +81,8 @@ class Online_Texas_Core_Activator {
 		// Set plugin version for future upgrades
 		update_option( 'online_texas_core_version', ONLINE_TEXAS_CORE_VERSION );
 
+		add_rewrite_endpoint('my-courses', EP_ROOT | EP_PAGES);
+
 		// Flush rewrite rules
 		flush_rewrite_rules();
 

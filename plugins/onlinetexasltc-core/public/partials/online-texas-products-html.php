@@ -3,6 +3,30 @@
 if ($products && $products->have_posts()) :
 
     while ($products->have_posts()) : $products->the_post();
+            $available_for_vendors = get_post_meta( get_the_ID(), '_available_for_vendors', true );
+            
+            // Check availability conditions
+            $show_product = false;
+            
+            if ( empty( $available_for_vendors ) ) {
+                // Not set - backward compatibility (show to all)
+                $show_product = true;
+            } elseif ( $available_for_vendors === 'yes' ) {
+                // Show to all vendors
+                $show_product = true;
+            } elseif ( $available_for_vendors === 'selective' ) {
+                
+                // Show only to selected vendors
+                $restricted_vendors = get_post_meta( get_the_ID(), '_restricted_vendors', true );
+                if ( is_array( $restricted_vendors ) && in_array( get_current_user_id(), $restricted_vendors ) ) {
+                    $show_product = true;
+                }
+            }
+            // If $available_for_vendors === 'no', $show_product remains false
+            
+            if ( ! $show_product ) {
+                continue;
+            }
         $product = wc_get_product(get_the_ID());
         $thumbnail = get_the_post_thumbnail_url(get_the_ID(), 'thumbnail');
         $categories = get_the_terms(get_the_ID(), 'product_cat');

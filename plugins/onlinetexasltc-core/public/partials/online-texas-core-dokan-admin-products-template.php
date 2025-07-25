@@ -79,27 +79,8 @@ try {
         $admin_users = array(1); // Fallback to user ID 1
     }
 
-    // Query for admin products with courses
-    $args = array(
-        'post_type' => 'product',
-        'post_status' => 'publish',
-        'author__in' => $admin_users,
-        'posts_per_page' => $per_page,
-        'paged' => $paged,
-        'meta_query' => array(
-            'relation' => 'OR',
-            array(
-                'key' => '_related_course',
-                'compare' => 'EXISTS'
-            ),
-            array(
-                'key' => '_related_group',
-                'compare' => 'EXISTS'
-            )
-        )
-    );
-
-    $products = new WP_Query($args);
+    
+    $products = get_admin_products_for_vendor( $paged, $per_page);
     
 } catch (Exception $e) {
     $products = new WP_Query(array('post_type' => 'product', 'posts_per_page' => 0));

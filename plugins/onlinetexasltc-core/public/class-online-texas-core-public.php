@@ -81,6 +81,9 @@ class Online_Texas_Core_Public {
 			$this->version, 
 			'all' 
 		);
+		if (is_account_page()) {
+			learndash_enqueue_course_grid_scripts();
+		}
 	}
 
 	/**
@@ -501,5 +504,252 @@ class Online_Texas_Core_Public {
 		);
 
 		return new WP_Query($args);
+	}
+
+	/**
+	 * Function for adding the endpoint in the account page for my courses
+	 *
+	 * @return void
+	 */
+	public function add_learndash_courses_endpoint() {
+		add_rewrite_endpoint('my-courses', EP_ROOT | EP_PAGES);
+	}
+
+	// Add My Courses to My Account menu
+	public function add_learndash_courses_menu($items) {
+		// Insert "My Courses" after "Dashboard" but before "Orders"
+		$new_items = array();
+		
+		foreach($items as $key => $item) {
+			$new_items[$key] = $item;
+			
+			// Add after dashboard
+			if($key === 'dashboard') {
+				$new_items['my-courses'] = __('My Courses', 'textdomain');
+			}
+		}
+		
+		return $new_items;
+	}
+
+
+	// Display LearnDash courses using shortcode
+	public function learndash_courses_endpoint_content() {
+		// Check if LearnDash is active
+		if (!function_exists('learndash_user_get_enrolled_courses')) {
+			echo '<div class="woocommerce-message woocommerce-message--info">';
+			echo __('LearnDash is not active. Please activate LearnDash plugin.', 'textdomain');
+			echo '</div>';
+			return;
+		}
+		echo '<div class="learndash-my-courses-wrapper">';
+		echo '<h3>' . __('My Courses', 'textdomain') . '</h3>';
+		
+		// Use LearnDash shortcode to display user's courses with progress bar
+		echo do_shortcode('[ld_course_list mycourses=“true” progress_bar=“true” num=“6” show_thumbnail=“true” col=“3”]');
+		
+		echo '</div>';
+	}
+
+	// Add custom query vars
+	public function add_learndash_courses_query_vars($vars) {
+		$vars[] = 'my-courses';
+		return $vars;
+	}
+	
+	/**
+	 * Fetch vendor details for LearnDash notifications
+	 * Usage: [ld_notifications field="vendor" show="name|email|phone|url|all"]
+	 */
+	public function wbcom_fetch_vendor_details($result, $atts, $data) {
+		// Check if this is a vendor field request
+		if (!isset($atts['field']) || 'vendor' !== $atts['field']) {
+			return $result;
+		}
+		
+		// Ensure we have required data
+		if (!isset($data['course_id']) || !isset($data['user_id'])) {
+			return $result;
+		}
+		
+		$course_id = intval($data['course_id']);
+		$user_id = intval($data['user_id']);
+		
+		// Get the specific group where user is enrolled AND contains the course
+		$group_id = get_user_course_group($user_id, $course_id);
+		if (empty($group_id)) {
+			return $result;
+		}
+		
+		// Get group leaders (vendors)
+		$group_leaders = get_post_meta( $group_id, 'learndash_group_leaders', true );
+		if (empty($group_leaders)) {
+			return $result;
+		}
+		
+		$vendor_id = $group_leaders[0]; // Use first leader as vendor
+		$vendor_data = get_userdata($vendor_id);
+		if (!$vendor_data) {
+			return $result;
+		}
+		
+		// Check what to show
+		if (!isset($atts['show'])) {
+			return $result;
+		}
+		
+		$show = strtolower($atts['show']);
+		
+		switch ($show) {
+			case 'name':
+				$result = $vendor_data->display_name;
+				break;
+				
+			case 'email':
+				$result = $vendor_data->user_email;
+				break;
+				
+			case 'phone':
+				$phone = get_user_meta($vendor_id, 'phone', true);
+				if (empty($phone)) {
+					$phone = get_user_meta($vendor_id, 'billing_phone', true);
+				}
+				if (empty($phone)) {
+					$phone = get_user_meta($vendor_id, 'user_phone', true);
+				}
+				
+				// Check for vendor plugin specific phone fields
+				if (empty($phone) && function_exists('dokan_get_store_info')) {
+					$store_info = dokan_get_store_info($vendor_id);
+					$phone = isset($store_info['phone']) ? $store_info['phone'] : '';
+				}
+				
+				if (empty($phone) && defined('WCFM_TOKEN')) {
+					$wcfm_profile = get_user_meta($vendor_id, 'wcfmmp_profile_settings', true);
+					$phone = isset($wcfm_profile['phone']) ? $wcfm_profile['phone'] : '';
+				}
+				
+				$result = !empty($phone) ? $phone : 'Not provided';
+				break;
+				
+			case 'url':
+			case 'website':
+				$url = $vendor_data->user_url;
+				if (empty($url)) {
+					$url = get_user_meta($vendor_id, 'user_url', true);
+				}
+				if (empty($url)) {
+					$url = get_user_meta($vendor_id, 'website', true);
+				}
+				
+				// Check for vendor plugin specific URL fields
+				if (empty($url) && function_exists('dokan_get_store_info')) {
+					$url = dokan_get_store_url($vendor_id);
+				}
+				
+				$result = !empty($url) ? $url : 'Not provided';
+				break;
+				
+			case 'all':
+			case 'info':
+				$vendor_name = $vendor_data->display_name;
+				$vendor_email = $vendor_data->user_email;
+				
+				// Get phone
+				$vendor_phone = get_user_meta($vendor_id, 'phone', true);
+				if (empty($vendor_phone)) {
+					$vendor_phone = get_user_meta($vendor_id, 'billing_phone', true);
+				}
+				if (empty($vendor_phone)) {
+					$vendor_phone = 'Not provided';
+				}
+				
+				// Get URL
+				$vendor_url = dokan_get_store_url($vendor_id);
+				if (empty($vendor_url)) {
+					$vendor_url = get_user_meta($vendor_id, 'website', true);
+				}
+				if (empty($vendor_url)) {
+					$vendor_url = 'Not provided';
+				}
+				
+				// Format output based on context (HTML or plain text)
+				if (isset($atts['format']) && 'plain' === $atts['format']) {
+					$result = "Vendor: {$vendor_name}\n";
+					$result .= "Email: {$vendor_email}\n";
+					$result .= "Phone: {$vendor_phone}\n";
+					$result .= "Website: {$vendor_url}";
+				} else {
+					$result = "<div class='vendor-info'>";
+					$result .= "<h4>Vendor Information</h4>";
+					$result .= "<p><strong>Name:</strong> {$vendor_name}</p>";
+					$result .= "<p><strong>Email:</strong> <a href='mailto:{$vendor_email}'>{$vendor_email}</a></p>";
+					$result .= "<p><strong>Phone:</strong> {$vendor_phone}</p>";
+					if ($vendor_url !== 'Not provided') {
+						$result .= "<p><strong>Website:</strong> <a href='{$vendor_url}' target='_blank'>{$vendor_url}</a></p>";
+					} else {
+						$result .= "<p><strong>Website:</strong> {$vendor_url}</p>";
+					}
+					$result .= "</div>";
+				}
+				break;
+				
+			case 'store_name':
+				// For vendor plugins that have store names
+				$store_name = '';
+				if (function_exists('dokan_get_store_info')) {
+					$store_info = dokan_get_store_info($vendor_id);
+					$store_name = isset($store_info['store_name']) ? $store_info['store_name'] : '';
+				}
+				
+				if (empty($store_name) && defined('WCFM_TOKEN')) {
+					$wcfm_profile = get_user_meta($vendor_id, 'wcfmmp_profile_settings', true);
+					$store_name = isset($wcfm_profile['store_name']) ? $wcfm_profile['store_name'] : '';
+				}
+				
+				$result = !empty($store_name) ? $store_name : $vendor_data->display_name;
+				break;
+				
+			case 'address':
+				$address = '';
+				if (function_exists('dokan_get_store_info')) {
+					$store_info = dokan_get_store_info($vendor_id);
+					if (isset($store_info['address'])) {
+						$addr = $store_info['address'];
+						$address_parts = array_filter([
+							$addr['street_1'] ?? '',
+							$addr['street_2'] ?? '',
+							$addr['city'] ?? '',
+							$addr['state'] ?? '',
+							$addr['zip'] ?? '',
+							$addr['country'] ?? ''
+						]);
+						$address = implode(', ', $address_parts);
+					}
+				}
+				
+				$result = !empty($address) ? $address : 'Not provided';
+				break;
+				
+			default:
+				// For custom fields or unknown show values
+				$custom_field = get_user_meta($vendor_id, $show, true);
+				$result = !empty($custom_field) ? $custom_field : 'Not available';
+				break;
+		}
+		
+		return $result;
+	}
+
+	public function wbcom_show_shortcode_attributes($instructions, $shortcode_groupings){
+		$instructions['complete_course']['[ld_notifications field="vendor" show="name"]'] = 'Display vendor name';
+		$instructions['complete_course']['[ld_notifications field="vendor" show="email"]'] = 'Display vendor email';
+		$instructions['complete_course']['[ld_notifications field="vendor" show="phone"]'] = 'Display vendor phone';
+		$instructions['complete_course']['[ld_notifications field="vendor" show="url"]'] = 'Display vendor website';
+		$instructions['complete_course']['[ld_notifications field="vendor" show="all"]'] = 'Display all vendor info (HTML format)';
+		$instructions['complete_course']['[ld_notifications field="vendor" show="all" format="plain"]'] = 'Display all vendor info (plain text)';
+		$instructions['complete_course']['[ld_notifications field="vendor" show="store_name"]'] = 'Display store name (for vendor plugins)';
+		$instructions['complete_course']['[ld_notifications field="vendor" show="address"]'] = 'Display vendor address';
+		return $instructions;
 	}
 }

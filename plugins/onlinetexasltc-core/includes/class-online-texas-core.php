@@ -78,7 +78,6 @@ class Online_Texas_Core {
 		$this->set_locale();
 		$this->define_admin_hooks();
 		$this->define_public_hooks();
-
 	}
 
 	/**
@@ -196,7 +195,7 @@ class Online_Texas_Core {
 
 		$plugin_public = new Online_Texas_Core_Public( $this->get_plugin_name(), $this->get_version() );
 
-		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_styles' );
+		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_styles',999 );
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_scripts' );
 
 		// Add the custom tab to vendor dashboard
@@ -217,6 +216,15 @@ class Online_Texas_Core {
 
 		$this->loader->add_action( 'wp_ajax_fetch_products_lists', $plugin_public, 'fetch_products_lists_callback' );
 		$this->loader->add_action( 'wp_ajax_nopriv_fetch_products_lists', $plugin_public, 'fetch_products_lists_callback' );
+		
+		$this->loader->add_action( 'init', $plugin_public, 'add_learndash_courses_endpoint' );
+		$this->loader->add_filter( 'woocommerce_account_menu_items', $plugin_public, 'add_learndash_courses_menu' );
+		$this->loader->add_action( 'woocommerce_account_my-courses_endpoint', $plugin_public, 'learndash_courses_endpoint_content' );
+		$this->loader->add_filter( 'query_vars', $plugin_public, 'add_learndash_courses_query_vars',0 );
+
+
+		$this->loader->add_filter( 'learndash_notifications_shortcode_output', $plugin_public, 'wbcom_fetch_vendor_details', 10, 3 );
+		$this->loader->add_filter( 'learndash_notifications_shortcodes_instructions', $plugin_public, 'wbcom_show_shortcode_attributes', 10, 2 );
 		
 	}
 

@@ -293,6 +293,46 @@ class Online_Texas_Core_Admin {
 			$restricted_vendors = array_map( 'intval', $_POST['_restricted_vendors'] );
 		}
 		update_post_meta( $post_id, '_restricted_vendors', $restricted_vendors );
+
+		$vendors = dokan_get_sellers( array( 'status' => 'approved' ) );
+		foreach ( $vendors['users'] as $vendor ) {
+		$vendor_id = $vendor->ID;
+		$get_restricted_products = get_user_meta($vendor_id, 'admin_restricted_products', true) ?? array();
+		
+		// Ensure it's always an array
+		if (!is_array($get_restricted_products)) {
+			$get_restricted_products = array();
+		}
+		
+		if( 'no' === $available_for_vendors ){
+			// Add to restriction list if not already present
+			if( !in_array($post_id, $get_restricted_products) ){
+				$get_restricted_products[] = $post_id;
+			}
+		} elseif( 'selective' === $available_for_vendors ){
+			// Add to restriction list if vendor is NOT in allowed list
+			if( !in_array($vendor_id, $restricted_vendors) ){
+				if( !in_array($post_id, $get_restricted_products) ){
+					$get_restricted_products[] = $post_id;
+				}
+			} else {
+				// Remove from restriction list if vendor IS in allowed list
+				$key = array_search($post_id, $get_restricted_products);
+				if ($key !== false) {
+					unset($get_restricted_products[$key]);
+					$get_restricted_products = array_values($get_restricted_products); // Re-index array
+				}
+			}
+		} else {
+			// For 'yes' or any other value, remove from restriction list
+			$key = array_search($post_id, $get_restricted_products);
+			if ($key !== false) {
+				unset($get_restricted_products[$key]);
+				$get_restricted_products = array_values($get_restricted_products); // Re-index array
+			}
+		}
+		update_user_meta($vendor_id, 'admin_restricted_products', $get_restricted_products);
+	}
 	}
 
 	/**
