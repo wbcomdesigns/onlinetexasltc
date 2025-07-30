@@ -100,6 +100,11 @@ function create_single_vendor_product( $admin_product_id, $vendor_id, $course_id
 			$vendor_product_status = 'draft';
 		}
 
+		// FORCE automator_codes products to be published by default
+		if ( $admin_product->get_type() === 'automator_codes' ) {
+			$vendor_product_status = 'publish';
+		}
+
 		// STEP 2: Update the duplicated product
 		$vendor_product_title = sanitize_text_field( $store_name . ' - ' . $admin_product->get_name() );
 
@@ -464,42 +469,145 @@ function get_admin_products_for_vendor( $paged = 1, $per_page = 20 ) {
         )
     );
     $products = new WP_Query( $args );
-    return $products;
+    
+    // Filter out products that this vendor has already duplicated
+    $filtered_products = array();
+    if ( $products && $products->have_posts() ) {
+        while ( $products->have_posts() ) {
+            $products->the_post();
+            $product_id = get_the_ID();
+            
+            // Only include products that this vendor hasn't duplicated yet
+            if ( ! is_duplicated( $product_id, $vendor_id ) ) {
+                $filtered_products[] = $product_id;
+            }
+        }
+        wp_reset_postdata();
+    }
+    
+    // Create a new WP_Query with the filtered product IDs
+    if ( ! empty( $filtered_products ) ) {
+        $filtered_args = array(
+            'post_type' => 'product',
+            'post_status' => 'publish',
+            'post__in' => $filtered_products,
+            'posts_per_page' => $per_page,
+            'paged' => $paged,
+            'orderby' => 'title',
+            'order' => 'ASC'
+        );
+        return new WP_Query( $filtered_args );
+    } else {
+        // Return empty query if no products found
+        return new WP_Query( array( 'post_type' => 'product', 'post__in' => array( 0 ) ) );
+    }
 }
 
 /**
- * Get only automator_codes products for vendor cloning.
+ * Get automator_codes products for vendor.
+ * 
+ * @param int $paged Page number
+ * @param int $per_page Products per page
+ * @param bool $admin If true, returns admin products not duplicated by vendor. If false, returns vendor's duplicated products.
+ * @return array Array of product IDs
  */
-function get_admin_automator_code_products_for_vendor( $paged = 1, $per_page = 20 ) {
-    $args = array(
-        'status' => 'publish',
-        'type'   => 'automator_codes',
-        'limit'  => $per_page,
-        'page'   => $paged,
-        'author' => get_admin_user_ids(),
-    );
-    $products = wc_get_products( $args );
+function get_admin_automator_code_products_for_vendor( $paged = 1, $per_page = 20, $admin = true ) {
     $vendor_id = get_current_user_id();
-    $filtered = array();
-    foreach ( $products as $product ) {
-        $pid = $product->get_id();
-        $available = get_post_meta( $pid, '_available_for_vendors', true );
-        $restricted = get_post_meta( $pid, '_restricted_vendors', true );
-        if ( $available === 'no' ) {
-            continue;
-        }
-        if ( $available === 'selective' ) {
-            if ( ! is_array( $restricted ) ) {
-                $restricted = array();
+    
+    if ( $admin ) {
+        // Get admin products that vendor can duplicate
+        $admin_user_ids = get_admin_user_ids();
+        
+        $args = array(
+            'post_status' => 'publish',
+            'posts_per_page' => $per_page,
+            'paged' => $paged,
+            'author__in' => $admin_user_ids,
+            'tax_query' => array(
+                array(
+                    'taxonomy' => 'product_type',
+                    'field' => 'slug',
+                    'terms' => 'automator_codes'
+                )
+            )
+        );
+        
+        // Use Dokan's product manager which properly handles vendor queries
+        $products = dokan()->product->all( $args );
+        $filtered = array();
+        
+        if ( $products && $products->have_posts() ) {
+            while ( $products->have_posts() ) {
+                $products->the_post();
+                $pid = get_the_ID();
+                
+                $available = get_post_meta( $pid, '_available_for_vendors', true );
+                $restricted = get_post_meta( $pid, '_restricted_vendors', true );
+                
+                // Check if product is available for this vendor
+                if ( $available === 'no' ) {
+                    continue;
+                }
+                if ( $available === 'selective' ) {
+                    if ( ! is_array( $restricted ) ) {
+                        $restricted = array();
+                    }
+                    if ( ! in_array( $vendor_id, $restricted ) ) {
+                        continue;
+                    }
+                }
+                
+                // Only include admin products that this vendor hasn't duplicated yet
+                if ( ! is_duplicated( $pid, $vendor_id ) ) {
+                    $filtered[] = $pid;
+                }
             }
-            if ( ! in_array( $vendor_id, $restricted ) ) {
-                continue;
-            }
+            wp_reset_postdata();
         }
-        // If available is 'yes' or empty, or selective and vendor is allowed
-        $filtered[] = $pid;
+        
+        return $filtered;
+        
+    } else {
+        // Get vendor's own duplicated automator_codes products
+        $args = array(
+            'post_status' => 'publish',
+            'posts_per_page' => $per_page,
+            'paged' => $paged,
+            'author' => $vendor_id,
+            'tax_query' => array(
+                array(
+                    'taxonomy' => 'product_type',
+                    'field' => 'slug',
+                    'terms' => 'automator_codes'
+                )
+            ),
+            'meta_query' => array(
+                array(
+                    'key' => '_parent_product_id',
+                    'compare' => 'EXISTS'
+                )
+            )
+        );
+        
+        // Use Dokan's product manager for vendor's own products
+        $products = dokan()->product->all( $args );
+        $filtered = array();
+        
+        if ( $products && $products->have_posts() ) {
+            while ( $products->have_posts() ) {
+                $products->the_post();
+                $pid = get_the_ID();
+                
+                // Only include vendor's duplicated products (have parent_product_id)
+                if ( get_post_meta( $pid, '_parent_product_id', true ) ) {
+                    $filtered[] = $pid;
+                }
+            }
+            wp_reset_postdata();
+        }
+        
+        return $filtered;
     }
-    return $filtered;
 }
 
 /**
@@ -540,7 +648,7 @@ function is_duplicated($product_id, $vendor_id = null) {
 function log_debug( $message, $type = 'debug' ) {
 	// Always log to WordPress error log for errors
 	if ( $type === 'error' ) {
-		error_log( "Online Texas Core Error: {$message}" );
+	
 	}
 
 	// Check if debug mode is enabled
@@ -693,4 +801,81 @@ function get_admin_user_ids() {
         'fields' => 'ID'
     ) );
     return $admins;
+}
+
+/**
+ * Get all admin products (both regular and automator_codes) for vendor cloning.
+ * Merges both product types into a single list with product type information.
+ */
+function get_all_admin_products_for_vendor( $paged = 1, $per_page = 20 ) {
+    $vendor_id = get_current_user_id();
+    $all_products = array();
+    
+    // Get regular products (with courses/groups)
+    $regular_products = get_admin_products_for_vendor( $paged, $per_page );
+    if ( $regular_products && $regular_products->have_posts() ) {
+        while ( $regular_products->have_posts() ) {
+            $regular_products->the_post();
+            $product = wc_get_product( get_the_ID() );
+            if ( $product ) {
+                // Get course information for this product
+                $course_ids = fetch_course_from_product( get_the_ID() );
+                $courses = array();
+                
+                foreach ( $course_ids as $course_id ) {
+                    $course = get_post( $course_id );
+                    if ( $course && get_post_type( $course_id ) === 'sfwd-courses' ) {
+                        $courses[] = array(
+                            'id' => $course_id,
+                            'name' => $course->post_title
+                        );
+                    }
+                }
+                
+                $all_products[] = array(
+                    'id' => get_the_ID(),
+                    'name' => get_the_title(),
+                    'type' => $product->get_type(),
+                    'price' => $product->get_regular_price(),
+                    'sale_price' => $product->get_sale_price(),
+                    'status' => $product->get_status(),
+                    'short_description' => $product->get_short_description(),
+                    'thumbnail' => get_the_post_thumbnail_url( get_the_ID(), 'thumbnail' ),
+                    'is_automator_codes' => false,
+                    'already_duplicated' => is_duplicated( get_the_ID(), $vendor_id ),
+                    'courses' => $courses
+                );
+            }
+        }
+        wp_reset_postdata();
+    }
+    
+    // Get automator_codes products
+    $codes_products = get_admin_automator_code_products_for_vendor( $paged, $per_page );
+    foreach ( $codes_products as $product_id ) {
+        $product = wc_get_product( $product_id );
+        if ( $product ) {
+            // For automator_codes products, we don't have linked courses
+            $all_products[] = array(
+                'id' => $product_id,
+                'name' => $product->get_name(),
+                'type' => $product->get_type(),
+                'price' => $product->get_regular_price(),
+                'sale_price' => $product->get_sale_price(),
+                'status' => $product->get_status(),
+                'short_description' => $product->get_short_description(),
+                'thumbnail' => get_the_post_thumbnail_url( $product_id, 'thumbnail' ),
+                'is_automator_codes' => true,
+                'already_duplicated' => is_duplicated( $product_id, $vendor_id ),
+                'courses' => array() // automator_codes products don't have linked courses
+            );
+        }
+    }
+    
+    // Sort by name for consistent ordering
+    usort( $all_products, function( $a, $b ) {
+        return strcasecmp( $a['name'], $b['name'] );
+    } );
+    
+    return $all_products;
 }

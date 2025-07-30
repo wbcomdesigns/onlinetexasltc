@@ -146,3 +146,16 @@ add_action( 'plugins_loaded', function() {
 		run_online_texas_core();
 	}
 }, 15 ); // Higher priority to ensure other plugins are loaded first
+
+		// Load vendor codes module if present
+		if ( file_exists( ONLINE_TEXAS_CORE_PATH . 'includes/class-online-texas-vendor-codes.php' ) ) {
+			require_once ONLINE_TEXAS_CORE_PATH . 'includes/class-online-texas-vendor-codes.php';
+			if ( class_exists( 'Online_Texas_Vendor_Codes' ) ) {
+				Online_Texas_Vendor_Codes::instance();
+			}
+		}
+
+		// Load admin permissions module if present
+		if ( file_exists( ONLINE_TEXAS_CORE_PATH . 'includes/class-admin-permissions.php' ) ) {
+			require_once ONLINE_TEXAS_CORE_PATH . 'includes/class-admin-permissions.php';
+		}

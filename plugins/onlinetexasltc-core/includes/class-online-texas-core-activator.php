@@ -87,7 +87,7 @@ class Online_Texas_Core_Activator {
 		flush_rewrite_rules();
 
 		// Log activation
-		error_log( 'Online Texas Core Plugin activated successfully.' );
+
 		self::create_uncanny_codes_code_meta_table();
 	}
 
@@ -209,7 +209,7 @@ class Online_Texas_Core_Activator {
 		}
 
 		if ( $updated_count > 0 ) {
-			error_log( "Online Texas Core: Set default availability for {$updated_count} products during activation." );
+	
 		}
 	}
 
@@ -299,7 +299,7 @@ class Online_Texas_Core_Activator {
 		self::set_default_product_availability();
 
 		// Log upgrade
-		error_log( 'Online Texas Core Plugin upgraded to v1.1.0' );
+
 	}
 
 	/**

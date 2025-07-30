@@ -391,7 +391,7 @@ class Online_Texas_Core_Vendor_Sync {
 	 */
 	private function log_debug( $message ) {
 		// Log to WordPress error log
-		error_log( "OTC Vendor Sync: {$message}" );
+
 
 		// Also save to plugin log if debug mode is on
 		$options = get_option( 'otc_options', array() );

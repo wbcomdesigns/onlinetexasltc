@@ -218,12 +218,15 @@ class Online_Texas_Core {
 		// Handle the template for admin products page
 		$this->loader->add_action( 'dokan_load_custom_template', $plugin_public, 'load_admin_products_template', 10, 1 );
 
-		// Handle AJAX request for duplicating products
+		// AJAX handlers for public functionality
 		$this->loader->add_action( 'wp_ajax_duplicate_admin_product', $plugin_public, 'handle_duplicate_admin_product' );
 		$this->loader->add_action( 'wp_ajax_nopriv_duplicate_admin_product', $plugin_public, 'handle_duplicate_admin_product' );
 
 		$this->loader->add_action( 'wp_ajax_fetch_products_lists', $plugin_public, 'fetch_products_lists_callback' );
 		$this->loader->add_action( 'wp_ajax_nopriv_fetch_products_lists', $plugin_public, 'fetch_products_lists_callback' );
+
+		$this->loader->add_action( 'wp_ajax_search_products_by_course', $plugin_public, 'handle_search_products_by_course' );
+		$this->loader->add_action( 'wp_ajax_nopriv_search_products_by_course', $plugin_public, 'handle_search_products_by_course' );
 		
 		$this->loader->add_action( 'init', $plugin_public, 'add_learndash_courses_endpoint' );
 		$this->loader->add_filter( 'woocommerce_account_menu_items', $plugin_public, 'add_learndash_courses_menu' );
@@ -233,7 +236,7 @@ class Online_Texas_Core {
 
 		$this->loader->add_filter( 'learndash_notifications_shortcode_output', $plugin_public, 'wbcom_fetch_vendor_details', 10, 3 );
 		$this->loader->add_filter( 'learndash_notifications_shortcodes_instructions', $plugin_public, 'wbcom_show_shortcode_attributes', 10, 2 );
-		
+
 	}
 
 	/**
