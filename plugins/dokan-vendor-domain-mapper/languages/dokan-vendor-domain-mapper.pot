@@ -1,0 +1,313 @@
+# Copyright (C) 2024 Wbcom Designs
+# This file is distributed under the GPL v2 or later.
+msgid ""
+msgstr ""
+"Project-Id-Version: Dokan Vendor Domain Mapper 1.0.0\n"
+"Report-Msgid-Bugs-To: https://wbcomdesigns.com\n"
+"POT-Creation-Date: 2024-01-08 17:30+0000\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"PO-Revision-Date: 2024-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+
+#: dokan-vendor-domain-mapper.php:75
+msgid "Dokan Vendor Domain Mapper requires Dokan plugin to be installed and activated."
+msgstr ""
+
+#: includes/class-domain-mapper.php:45
+msgid "Invalid domain format."
+msgstr ""
+
+#: includes/class-domain-mapper.php:50
+msgid "Domain already exists."
+msgstr ""
+
+#: includes/class-domain-mapper.php:55
+msgid "Domain limit exceeded."
+msgstr ""
+
+#: includes/class-domain-mapper.php:70
+msgid "Failed to add domain."
+msgstr ""
+
+#: includes/class-domain-mapper.php:85
+msgid "Domain mapping not found."
+msgstr ""
+
+#: includes/class-vendor-dashboard.php:45
+msgid "Store Domain"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:9
+msgid "Domain Mapping Management"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:15
+msgid "Total Domains"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:19
+msgid "Pending"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:23
+msgid "Verified"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:27
+msgid "Approved"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:31
+msgid "Live"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:39
+msgid "All Statuses"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:41
+msgid "Rejected"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:47
+msgid "Vendor ID"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:49
+msgid "Filter"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:50
+msgid "Clear"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:56
+msgid "Bulk Actions"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:58
+msgid "Approve"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:59
+msgid "Reject"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:60
+msgid "Delete"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:62
+msgid "Apply"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:66
+msgid "Export CSV"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:67
+msgid "Export JSON"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:75
+msgid "Domain"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:76
+msgid "Vendor"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:77
+msgid "Status"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:78
+msgid "SSL"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:79
+msgid "Created"
+msgstr ""
+
+#: templates/admin/domain-mappings.php:80
+msgid "Actions"
+msgstr ""
+
+#: templates/vendor/domain-mapping.php:12
+msgid "Store Domain Management"
+msgstr ""
+
+#: templates/vendor/domain-mapping.php:17
+msgid "Domain Limits"
+msgstr ""
+
+#: templates/vendor/domain-mapping.php:19
+msgid "You can add up to %d domain(s). Currently using %d domain(s)."
+msgstr ""
+
+#: templates/vendor/domain-mapping.php:22
+msgid "%d domain(s) remaining"
+msgstr ""
+
+#: templates/vendor/domain-mapping.php:24
+msgid "Domain limit reached"
+msgstr ""
+
+#: templates/vendor/domain-mapping.php:30
+msgid "Add New Domain"
+msgstr ""
+
+#: templates/vendor/domain-mapping.php:33
+msgid "Domain Name:"
+msgstr ""
+
+#: templates/vendor/domain-mapping.php:35
+msgid "Add Domain"
+msgstr ""
+
+#: templates/vendor/domain-mapping.php:38
+msgid "Enter your domain name (e.g., mystore.com or shop.vendor.com). Do not include http:// or https://"
+msgstr ""
+
+#: templates/vendor/domain-mapping.php:45
+msgid "Total"
+msgstr ""
+
+#: templates/vendor/domain-mapping.php:55
+msgid "Your Domains"
+msgstr ""
+
+#: templates/vendor/domain-mapping.php:58
+msgid "You haven't added any domains yet."
+msgstr ""
+
+#: templates/vendor/domain-mapping.php:60
+msgid "Add your first domain above to get started."
+msgstr ""
+
+#: templates/admin/settings.php:9
+msgid "Domain Mapping Settings"
+msgstr ""
+
+#: templates/admin/settings.php:18
+msgid "Enable Domain Mapping"
+msgstr ""
+
+#: templates/admin/settings.php:20
+msgid "Enable domain mapping functionality for vendors."
+msgstr ""
+
+#: templates/admin/settings.php:25
+msgid "Require DNS Verification"
+msgstr ""
+
+#: templates/admin/settings.php:27
+msgid "Require vendors to verify domain ownership via DNS TXT records."
+msgstr ""
+
+#: templates/admin/settings.php:32
+msgid "Require Admin Approval"
+msgstr ""
+
+#: templates/admin/settings.php:34
+msgid "Require admin approval before domains go live."
+msgstr ""
+
+#: templates/admin/settings.php:39
+msgid "Max Domains Per Vendor"
+msgstr ""
+
+#: templates/admin/settings.php:41
+msgid "Maximum number of domains each vendor can add."
+msgstr ""
+
+#: templates/admin/settings.php:46
+msgid "Default SSL Provider"
+msgstr ""
+
+#: templates/admin/settings.php:49
+msgid "Cloudflare"
+msgstr ""
+
+#: templates/admin/settings.php:50
+msgid "Let's Encrypt"
+msgstr ""
+
+#: templates/admin/settings.php:51
+msgid "Manual"
+msgstr ""
+
+#: templates/admin/settings.php:52
+msgid "Default SSL certificate provider for new domains."
+msgstr ""
+
+#: templates/admin/settings.php:57
+msgid "Enable Proxy Server"
+msgstr ""
+
+#: templates/admin/settings.php:59
+msgid "Enable reverse proxy server configuration."
+msgstr ""
+
+#: templates/admin/settings.php:64
+msgid "Proxy Server URL"
+msgstr ""
+
+#: templates/admin/settings.php:66
+msgid "URL of your reverse proxy server (e.g., https://proxy.yourdomain.com)."
+msgstr ""
+
+#: templates/admin/settings.php:71
+msgid "Cloudflare Integration"
+msgstr ""
+
+#: templates/admin/settings.php:73
+msgid "Enable Cloudflare integration for automatic SSL and DNS management."
+msgstr ""
+
+#: templates/admin/settings.php:78
+msgid "Let's Encrypt Integration"
+msgstr ""
+
+#: templates/admin/settings.php:80
+msgid "Enable Let's Encrypt integration for automatic SSL certificates."
+msgstr ""
+
+#: templates/admin/settings.php:85
+msgid "Auto SSL Renewal"
+msgstr ""
+
+#: templates/admin/settings.php:87
+msgid "Automatically renew SSL certificates before expiry."
+msgstr ""
+
+#: templates/admin/settings.php:95
+msgid "Server Configuration"
+msgstr ""
+
+#: templates/admin/settings.php:96
+msgid "To use domain mapping, you need to configure your server with a reverse proxy. Here are the supported configurations:"
+msgstr ""
+
+#: templates/admin/settings.php:99
+msgid "Most common and recommended for high performance."
+msgstr ""
+
+#: templates/admin/settings.php:101
+msgid "Good for shared hosting environments."
+msgstr ""
+
+#: templates/admin/settings.php:103
+msgid "Serverless solution with automatic SSL."
+msgstr ""
+
+#: templates/admin/settings.php:105
+msgid "Modern web server with automatic HTTPS."
+msgstr ""
+
+#: templates/admin/settings.php:108
+msgid "View Domain Mappings"
+msgstr "" 

@@ -1,0 +1,485 @@
+/**
+ * Admin CSS for Dokan Domain Mapper
+ */
+
+/* Statistics Dashboard */
+.domain-mapper-stats {
+    display: flex;
+    gap: 20px;
+    margin: 20px 0;
+    flex-wrap: wrap;
+}
+
+.stat-box {
+    background: #fff;
+    border: 1px solid #ddd;
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+    min-width: 120px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: transform 0.2s ease;
+}
+
+.stat-box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.stat-box h3 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stat-number {
+    font-size: 28px;
+    font-weight: bold;
+    color: #333;
+    display: block;
+}
+
+.stat-number.pending { color: #f39c12; }
+.stat-number.verified { color: #3498db; }
+.stat-number.approved { color: #27ae60; }
+.stat-number.live { color: #2ecc71; }
+
+/* Filters */
+.domain-mapper-filters {
+    background: #fff;
+    padding: 20px;
+    border: 1px solid #ddd;
+    margin-bottom: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.domain-mapper-filters select,
+.domain-mapper-filters input[type="text"] {
+    margin-right: 10px;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.domain-mapper-filters select:focus,
+.domain-mapper-filters input[type="text"]:focus {
+    outline: none;
+    border-color: #0073aa;
+    box-shadow: 0 0 0 1px #0073aa;
+}
+
+/* Status Badges */
+.status-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: inline-block;
+}
+
+.status-badge.status-pending { 
+    background: #fff3cd; 
+    color: #856404; 
+    border: 1px solid #ffeaa7;
+}
+
+.status-badge.status-verified { 
+    background: #d1ecf1; 
+    color: #0c5460; 
+    border: 1px solid #bee5eb;
+}
+
+.status-badge.status-approved { 
+    background: #d4edda; 
+    color: #155724; 
+    border: 1px solid #c3e6cb;
+}
+
+.status-badge.status-rejected { 
+    background: #f8d7da; 
+    color: #721c24; 
+    border: 1px solid #f5c6cb;
+}
+
+.status-badge.status-live { 
+    background: #d1e7dd; 
+    color: #0f5132; 
+    border: 1px solid #badbcc;
+}
+
+/* SSL Status */
+.ssl-status {
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.ssl-status.cloudflare { 
+    background: #f39c12; 
+    color: #fff; 
+}
+
+.ssl-status.lets_encrypt { 
+    background: #3498db; 
+    color: #fff; 
+}
+
+.ssl-status.manual { 
+    background: #9b59b6; 
+    color: #fff; 
+}
+
+.ssl-status.none { 
+    background: #95a5a6; 
+    color: #fff; 
+}
+
+/* Domain Links */
+.domain-link {
+    font-size: 12px;
+    color: #0073aa;
+    text-decoration: none;
+    display: inline-block;
+    margin-top: 5px;
+}
+
+.domain-link:hover {
+    text-decoration: underline;
+    color: #005a87;
+}
+
+/* Table Enhancements */
+.wp-list-table .column-domain {
+    width: 20%;
+}
+
+.wp-list-table .column-vendor {
+    width: 25%;
+}
+
+.wp-list-table .column-status {
+    width: 12%;
+}
+
+.wp-list-table .column-ssl {
+    width: 10%;
+}
+
+.wp-list-table .column-created {
+    width: 15%;
+}
+
+.wp-list-table .column-actions {
+    width: 18%;
+}
+
+.wp-list-table td {
+    vertical-align: middle;
+}
+
+.wp-list-table .column-actions .button {
+    margin: 2px;
+    font-size: 11px;
+    padding: 4px 8px;
+    height: auto;
+    line-height: 1.4;
+}
+
+/* Modals */
+.modal {
+    position: fixed;
+    z-index: 100000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.6);
+    backdrop-filter: blur(2px);
+}
+
+.modal-content {
+    background-color: #fff;
+    margin: 5% auto;
+    padding: 30px;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 700px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    animation: modalSlideIn 0.3s ease;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-50px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.modal-content h3 {
+    margin: 0 0 20px 0;
+    color: #333;
+    font-size: 20px;
+    border-bottom: 2px solid #0073aa;
+    padding-bottom: 10px;
+}
+
+.modal-actions {
+    margin-top: 25px;
+    text-align: right;
+    border-top: 1px solid #eee;
+    padding-top: 20px;
+}
+
+.modal-actions .button {
+    margin-left: 10px;
+    padding: 8px 16px;
+    font-size: 14px;
+}
+
+/* Form Elements */
+#reject-reason {
+    width: 100%;
+    min-height: 100px;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+}
+
+#reject-reason:focus {
+    outline: none;
+    border-color: #0073aa;
+    box-shadow: 0 0 0 1px #0073aa;
+}
+
+/* Proxy Configuration */
+.proxy-config-tabs {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.config-tab {
+    margin-bottom: 25px;
+    padding: 20px;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    background: #f8f9fa;
+}
+
+.config-tab h4 {
+    margin: 0 0 15px 0;
+    color: #333;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.config-tab pre {
+    background: #2d3748;
+    color: #e2e8f0;
+    padding: 15px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin-bottom: 15px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.config-tab code {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+}
+
+.copy-config {
+    background: #0073aa;
+    color: #fff;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background-color 0.2s ease;
+}
+
+.copy-config:hover {
+    background: #005a87;
+}
+
+/* Notices */
+.notice {
+    margin: 20px 0;
+    padding: 12px 15px;
+    border-radius: 6px;
+    border-left: 4px solid;
+}
+
+.notice-success {
+    background: #d4edda;
+    border-color: #28a745;
+    color: #155724;
+}
+
+.notice-error {
+    background: #f8d7da;
+    border-color: #dc3545;
+    color: #721c24;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+    .domain-mapper-stats {
+        justify-content: center;
+    }
+    
+    .stat-box {
+        min-width: 100px;
+    }
+}
+
+@media (max-width: 768px) {
+    .domain-mapper-stats {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .stat-box {
+        width: 100%;
+        max-width: 200px;
+    }
+    
+    .domain-mapper-filters {
+        text-align: center;
+    }
+    
+    .domain-mapper-filters select,
+    .domain-mapper-filters input[type="text"] {
+        margin: 5px;
+        width: calc(50% - 10px);
+    }
+    
+    .modal-content {
+        margin: 10% auto;
+        width: 95%;
+        padding: 20px;
+    }
+    
+    .wp-list-table {
+        font-size: 12px;
+    }
+    
+    .wp-list-table .column-actions .button {
+        display: block;
+        width: 100%;
+        margin: 2px 0;
+        text-align: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .domain-mapper-filters select,
+    .domain-mapper-filters input[type="text"] {
+        width: 100%;
+        margin: 5px 0;
+    }
+    
+    .stat-number {
+        font-size: 24px;
+    }
+    
+    .modal-content {
+        margin: 5% auto;
+        padding: 15px;
+    }
+}
+
+/* Loading States */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #0073aa;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Tooltips */
+.tooltip {
+    position: relative;
+    display: inline-block;
+}
+
+.tooltip .tooltiptext {
+    visibility: hidden;
+    width: 200px;
+    background-color: #333;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    padding: 8px;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%;
+    left: 50%;
+    margin-left: -100px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-size: 12px;
+}
+
+.tooltip:hover .tooltiptext {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Print Styles */
+@media print {
+    .domain-mapper-filters,
+    .tablenav,
+    .modal,
+    .button {
+        display: none !important;
+    }
+    
+    .wp-list-table {
+        border: 1px solid #000;
+    }
+    
+    .wp-list-table th,
+    .wp-list-table td {
+        border: 1px solid #000;
+        padding: 8px;
+    }
+} 
