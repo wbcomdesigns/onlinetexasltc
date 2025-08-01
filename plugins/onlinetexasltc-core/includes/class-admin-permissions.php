@@ -43,6 +43,7 @@ class Online_Texas_Admin_Permissions {
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('wp_ajax_approve_vendor_code_request', array($this, 'approve_vendor_code_request'));
         add_action('wp_ajax_reject_vendor_code_request', array($this, 'reject_vendor_code_request'));
+        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
     }
 
     /**
@@ -214,81 +215,37 @@ class Online_Texas_Admin_Permissions {
                 </div>
             <?php endif; ?>
         </div>
-        
-        <script type="text/javascript">
-        jQuery(document).ready(function($) {
-            // Handle approve requests
-            $(document).on('click', '.approve-request', function(e) {
-                e.preventDefault();
-                
-                var button = $(this);
-                var requestId = button.data('request-id');
-                
-                if (confirm('<?php esc_html_e('Are you sure you want to approve this request?', 'online-texas-core'); ?>')) {
-                    button.prop('disabled', true).text('<?php esc_html_e('Approving...', 'online-texas-core'); ?>');
-                    
-                    $.ajax({
-                        url: ajaxurl,
-                        type: 'POST',
-                        data: {
-                            action: 'approve_vendor_code_request',
-                            request_id: requestId,
-                            nonce: '<?php echo wp_create_nonce('approve_vendor_code_request'); ?>'
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                alert('<?php esc_html_e('Request approved and codes generated successfully!', 'online-texas-core'); ?>');
-                                location.reload();
-                            } else {
-                                alert('<?php esc_html_e('Error:', 'online-texas-core'); ?> ' + response.data);
-                                button.prop('disabled', false).text('<?php esc_html_e('Approve', 'online-texas-core'); ?>');
-                            }
-                        },
-                        error: function(xhr, status, error) {
-                            alert('<?php esc_html_e('An error occurred. Please try again.', 'online-texas-core'); ?>');
-                            button.prop('disabled', false).text('<?php esc_html_e('Approve', 'online-texas-core'); ?>');
-                        }
-                    });
-                }
-            });
-            
-            // Handle reject requests
-            $(document).on('click', '.reject-request', function(e) {
-                e.preventDefault();
-                
-                var button = $(this);
-                var requestId = button.data('request-id');
-                
-                if (confirm('<?php esc_html_e('Are you sure you want to reject this request?', 'online-texas-core'); ?>')) {
-                    button.prop('disabled', true).text('<?php esc_html_e('Rejecting...', 'online-texas-core'); ?>');
-                    
-                    $.ajax({
-                        url: ajaxurl,
-                        type: 'POST',
-                        data: {
-                            action: 'reject_vendor_code_request',
-                            request_id: requestId,
-                            nonce: '<?php echo wp_create_nonce('reject_vendor_code_request'); ?>'
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                alert('<?php esc_html_e('Request rejected successfully!', 'online-texas-core'); ?>');
-                                location.reload();
-                            } else {
-                                alert('<?php esc_html_e('Error:', 'online-texas-core'); ?> ' + response.data);
-                                button.prop('disabled', false).text('<?php esc_html_e('Reject', 'online-texas-core'); ?>');
-                            }
-                        },
-                        error: function(xhr, status, error) {
-                            alert('<?php esc_html_e('An error occurred. Please try again.', 'online-texas-core'); ?>');
-                            button.prop('disabled', false).text('<?php esc_html_e('Reject', 'online-texas-core'); ?>');
-                        }
-                    });
-                }
-            });
-        });
-        </script>
         <?php
+    }
+
+    /**
+     * Enqueue admin scripts with proper nonce handling
+     */
+    public function enqueue_admin_scripts($hook) {
+        if ('woocommerce_page_vendor-code-requests' !== $hook) {
+            return;
+        }
+
+        wp_enqueue_script(
+            'otc-admin-permissions',
+            ONLINE_TEXAS_CORE_URL . 'admin/js/admin-permissions.js',
+            array('jquery'),
+            ONLINE_TEXAS_CORE_VERSION,
+            true
+        );
+
+        wp_localize_script('otc-admin-permissions', 'otc_admin_permissions', array(
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'approve_nonce' => wp_create_nonce('approve_vendor_code_request'),
+            'reject_nonce' => wp_create_nonce('reject_vendor_code_request'),
+            'confirm_approve' => __('Are you sure you want to approve this request?', 'online-texas-core'),
+            'confirm_reject' => __('Are you sure you want to reject this request?', 'online-texas-core'),
+            'approving_text' => __('Approving...', 'online-texas-core'),
+            'rejecting_text' => __('Rejecting...', 'online-texas-core'),
+            'approve_text' => __('Approve', 'online-texas-core'),
+            'reject_text' => __('Reject', 'online-texas-core'),
+            'error_text' => __('An error occurred. Please try again.', 'online-texas-core')
+        ));
     }
 
     /**
@@ -333,9 +290,10 @@ class Online_Texas_Admin_Permissions {
         // Get stored requests from wp_options
         $stored_requests = get_option( 'vendor_code_requests', array() );
         
-        // Debug: Log what we found
-        error_log( 'Admin interface - Found ' . count( $stored_requests ) . ' stored requests' );
-        error_log( 'Admin interface - Stored requests: ' . print_r( $stored_requests, true ) );
+        // Debug logging only in development
+        if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+            error_log( 'Online Texas Core: Processing vendor code requests' );
+        }
         
         if ( ! empty( $stored_requests ) ) {
             foreach ( $stored_requests as $request_id => $request_data ) {
@@ -421,7 +379,17 @@ class Online_Texas_Admin_Permissions {
             wp_send_json_error('Insufficient permissions');
         }
         
+        // Validate request ID
+        if (empty($_POST['request_id']) || !is_string($_POST['request_id'])) {
+            wp_send_json_error('Invalid request ID');
+        }
+        
         $request_id = sanitize_text_field($_POST['request_id']);
+        
+        // Additional validation - ensure request_id format is safe
+        if (!preg_match('/^[0-9]+_[0-9]+$/', $request_id)) {
+            wp_send_json_error('Invalid request ID format');
+        }
         
         // Get stored requests
         $stored_requests = get_option('vendor_code_requests', array());
@@ -431,6 +399,16 @@ class Online_Texas_Admin_Permissions {
         }
         
         $request_data = $stored_requests[$request_id];
+        
+        // Validate request data integrity
+        if (!is_array($request_data) || empty($request_data['vendor_id']) || empty($request_data['product_id'])) {
+            wp_send_json_error('Invalid request data');
+        }
+        
+        // Ensure request is still pending
+        if ($request_data['status'] !== 'pending') {
+            wp_send_json_error('Request has already been processed');
+        }
         
         // Generate codes for the vendor
         if (class_exists('Online_Texas_Vendor_Codes')) {
@@ -444,8 +422,10 @@ class Online_Texas_Admin_Permissions {
             $vendor_product_id = self::get_vendor_product_id($vendor_id, $admin_product_id);
             
             if ($vendor_product_id) {
-                // Debug: Log approval details
-                error_log( 'Approving code request - Vendor: ' . $vendor_id . ', Product: ' . $vendor_product_id . ', Codes: ' . $codes_to_generate . ', Type: ' . $code_type . ', Expiry: ' . $expiry_date );
+                // Debug logging only in development
+                if ( defined( 'WP_DEBUG' ) && WP_DEBUG && defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
+                    error_log( 'Online Texas Core: Processing code approval request' );
+                }
                 
                 try {
                     // Generate codes using the static method that handles expiry and code type

@@ -102,13 +102,57 @@ class Online_Texas_Vendor_Codes {
 		try {
 			// Handle code generation form submission
 			if ( isset( $_POST['generate_codes_nonce'] ) && wp_verify_nonce( $_POST['generate_codes_nonce'], 'generate_vendor_codes' ) ) {
+				// Comprehensive input validation
+				$validation_errors = array();
+				
+				// Validate product ID
+				if ( empty( $_POST['product_id'] ) || ! is_numeric( $_POST['product_id'] ) ) {
+					$validation_errors[] = __( 'Invalid product ID.', 'online-texas-core' );
+				}
 				$admin_product_id = intval( $_POST['product_id'] );
+				
+				// Validate admin product exists and is accessible
+				if ( $admin_product_id > 0 ) {
+					$admin_product = wc_get_product( $admin_product_id );
+					if ( ! $admin_product || $admin_product->get_status() !== 'publish' ) {
+						$validation_errors[] = __( 'Product not found or not available.', 'online-texas-core' );
+					}
+				}
+				
+				// Validate codes to generate
+				if ( empty( $_POST['codes_to_generate'] ) || ! is_numeric( $_POST['codes_to_generate'] ) ) {
+					$validation_errors[] = __( 'Invalid number of codes.', 'online-texas-core' );
+				}
 				$codes_to_generate = intval( $_POST['codes_to_generate'] );
-				$expiry_date = sanitize_text_field( $_POST['expiry_date'] );
-				$code_type = sanitize_text_field( $_POST['code_type'] );
-
-				// Validate inputs
-				if ( $admin_product_id && $codes_to_generate >= 1 && $codes_to_generate <= 20 ) {
+				if ( $codes_to_generate < 1 || $codes_to_generate > 20 ) {
+					$validation_errors[] = __( 'Number of codes must be between 1 and 20.', 'online-texas-core' );
+				}
+				
+				// Validate expiry date format if provided
+				$expiry_date = '';
+				if ( ! empty( $_POST['expiry_date'] ) ) {
+					$expiry_date = sanitize_text_field( $_POST['expiry_date'] );
+					if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $expiry_date ) ) {
+						$validation_errors[] = __( 'Invalid expiry date format.', 'online-texas-core' );
+					} else {
+						// Check if date is in the future
+						$expiry_timestamp = strtotime( $expiry_date );
+						if ( $expiry_timestamp && $expiry_timestamp <= time() ) {
+							$validation_errors[] = __( 'Expiry date must be in the future.', 'online-texas-core' );
+						}
+					}
+				}
+				
+				// Validate code type
+				$code_type = sanitize_text_field( $_POST['code_type'] ?? 'registration' );
+				if ( ! in_array( $code_type, array( 'registration', 'discount' ), true ) ) {
+					$code_type = 'registration'; // Default to safe value
+				}
+				
+				// Check for validation errors
+				if ( ! empty( $validation_errors ) ) {
+					$error_message = implode( ' ', $validation_errors );
+				} elseif ( $admin_product_id && $codes_to_generate >= 1 && $codes_to_generate <= 20 ) {
 					// Check admin permissions using admin product ID
 					if ( class_exists( 'Online_Texas_Admin_Permissions' ) ) {
 						if ( ! Online_Texas_Admin_Permissions::vendor_can_generate_codes( $current_vendor, $admin_product_id ) ) {
@@ -175,13 +219,13 @@ class Online_Texas_Vendor_Codes {
 					<div class="online-texas-dashboard-content">
 						<?php if ( $success_message ) : ?>
 							<div class="dokan-alert dokan-alert-success">
-								<?php echo $success_message; ?>
+								<?php echo esc_html( $success_message ); ?>
 							</div>
 						<?php endif; ?>
 
 						<?php if ( $error_message ) : ?>
 							<div class="dokan-alert dokan-alert-danger">
-								<?php echo $error_message; ?>
+								<?php echo esc_html( $error_message ); ?>
 							</div>
 						<?php endif; ?>
 
@@ -313,9 +357,9 @@ class Online_Texas_Vendor_Codes {
 												<div class="dokan-page-numbers" style="margin-top: 10px;">
 													<?php for ( $i = 1; $i <= $total_pages; $i++ ) : ?>
 														<?php if ( $i == $current_page ) : ?>
-															<span class="dokan-page-number current" style="display: inline-block; padding: 5px 10px; margin: 0 2px; background: #007cba; color: white; border-radius: 3px; text-decoration: none;"><?php echo $i; ?></span>
+															<span class="dokan-page-number current" style="display: inline-block; padding: 5px 10px; margin: 0 2px; background: #007cba; color: white; border-radius: 3px; text-decoration: none;"><?php echo esc_html( $i ); ?></span>
 														<?php else : ?>
-															<a href="<?php echo esc_url( add_query_arg( 'paged', $i, $base_url ) ); ?>" class="dokan-page-number" style="display: inline-block; padding: 5px 10px; margin: 0 2px; background: #f8f9fa; color: #333; border: 1px solid #ddd; border-radius: 3px; text-decoration: none;"><?php echo $i; ?></a>
+															<a href="<?php echo esc_url( add_query_arg( 'paged', $i, $base_url ) ); ?>" class="dokan-page-number" style="display: inline-block; padding: 5px 10px; margin: 0 2px; background: #f8f9fa; color: #333; border: 1px solid #ddd; border-radius: 3px; text-decoration: none;"><?php echo esc_html( $i ); ?></a>
 														<?php endif; ?>
 													<?php endfor; ?>
 												</div>
@@ -367,7 +411,7 @@ class Online_Texas_Vendor_Codes {
      */
     private static function table_exists( $table_name ) {
         global $wpdb;
-        $result = $wpdb->get_var( "SHOW TABLES LIKE '$table_name'" );
+        $result = $wpdb->get_var( $wpdb->prepare( "SHOW TABLES LIKE %s", $table_name ) );
         $exists = $result === $table_name;
         return $exists;
     }
@@ -436,10 +480,10 @@ class Online_Texas_Vendor_Codes {
             return;
         }
         
-        $all_meta = $wpdb->get_results( "SELECT * FROM $table ORDER BY meta_id DESC LIMIT 20" );
+        $all_meta = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM %i ORDER BY meta_id DESC LIMIT %d", $table, 20 ) );
         
         // Check specifically for vendor meta
-        $vendor_meta = $wpdb->get_results( "SELECT * FROM $table WHERE meta_key = '_dokan_vendor_id' ORDER BY meta_id DESC" );
+        $vendor_meta = $wpdb->get_results( $wpdb->prepare( "SELECT * FROM %i WHERE meta_key = %s ORDER BY meta_id DESC", $table, '_dokan_vendor_id' ) );
     }
 
     /**
@@ -651,9 +695,7 @@ class Online_Texas_Vendor_Codes {
                 $discount = ( $cart_total * $discount_amount ) / 100;
                 
                 // Add discount as a fee (negative amount)
-                $cart->add_fee( 'Vendor Discount (' . $code . ')', -$discount );
-                
-                error_log( 'Applied vendor discount: ' . $discount . ' for code: ' . $code );
+                $cart->add_fee( sprintf( __( 'Vendor Discount (%s)', 'online-texas-core' ), esc_html( $code ) ), -$discount );
             }
         }
     }
@@ -724,14 +766,20 @@ class Online_Texas_Vendor_Codes {
 		// Get the vendor batch this code belongs to
 		$vendor_batch_id = self::get_code_meta( $code_id, '_vendor_batch_id' );
 		if ( ! $vendor_batch_id ) {
-			error_log( 'Vendor code missing vendor_batch_id: ' . $code_id );
+			// Log error without exposing sensitive data
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'Online Texas Core: Vendor code missing batch ID' );
+			}
 			return;
 		}
 		
 		// Get the admin batch mapping
 		$admin_batch_id = self::get_vendor_batch_admin_mapping( $vendor_batch_id );
 		if ( ! $admin_batch_id ) {
-			error_log( 'No admin batch mapping found for vendor batch: ' . $vendor_batch_id );
+			// Log error without exposing sensitive data
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'Online Texas Core: No admin batch mapping found' );
+			}
 			return;
 		}
 		
@@ -774,7 +822,10 @@ class Online_Texas_Vendor_Codes {
 		) );
 		
 		if ( ! $admin_product_id ) {
-			error_log( 'No admin product found for batch: ' . $admin_batch_id );
+			// Log error without exposing sensitive data
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'Online Texas Core: No admin product found for batch' );
+			}
 			return;
 		}
 		
@@ -865,62 +916,124 @@ class Online_Texas_Vendor_Codes {
 			'product_id'            => 0, // Will be set after vendor product creation
 		);
 		
-		$vendor_batch_id = \uncanny_learndash_codes\Database::add_code_group_batch( $group_args );
+		// Use database transaction for batch creation
+		global $wpdb;
+		$wpdb->query( 'START TRANSACTION' );
 		
-		if ( $vendor_batch_id ) {
-			// Store the admin batch mapping
-			update_post_meta( $vendor_batch_id, '_admin_batch_mapping', $admin_batch_id );
-			update_post_meta( $vendor_batch_id, '_vendor_id', $vendor_id );
-			update_post_meta( $vendor_batch_id, '_admin_product_id', $admin_product_id );
+		try {
+			$vendor_batch_id = \uncanny_learndash_codes\Database::add_code_group_batch( $group_args );
 			
-			error_log( 'Created vendor batch ' . $vendor_batch_id . ' for vendor ' . $vendor_id . ' mapping to admin batch ' . $admin_batch_id );
+			if ( ! $vendor_batch_id ) {
+				throw new Exception( 'Failed to create vendor batch' );
+			}
+			
+			// Store the admin batch mapping (atomic operations)
+			if ( ! update_post_meta( $vendor_batch_id, '_admin_batch_mapping', $admin_batch_id ) ) {
+				throw new Exception( 'Failed to set admin batch mapping' );
+			}
+			if ( ! update_post_meta( $vendor_batch_id, '_vendor_id', $vendor_id ) ) {
+				throw new Exception( 'Failed to set vendor ID' );
+			}
+			if ( ! update_post_meta( $vendor_batch_id, '_admin_product_id', $admin_product_id ) ) {
+				throw new Exception( 'Failed to set admin product ID' );
+			}
+			
+			// Commit transaction
+			$wpdb->query( 'COMMIT' );
+			
+			// Log success without exposing sensitive IDs
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'Online Texas Core: Successfully created vendor batch' );
+			}
+			
+			return $vendor_batch_id;
+			
+		} catch ( Exception $e ) {
+			// Rollback transaction on error
+			$wpdb->query( 'ROLLBACK' );
+			
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'Online Texas Core: Vendor batch creation failed - ' . $e->getMessage() );
+			}
+			
+			return false;
 		}
-		
-		return $vendor_batch_id;
 	}
 	
 	/**
 	 * Generate codes for vendor batch
 	 */
 	public static function generate_codes_for_vendor_batch( $vendor_batch_id, $code_count, $vendor_id, $expiry_date = null ) {
-		// Generate codes
-		$codes = array();
-		for ( $i = 0; $i < $code_count; $i++ ) {
-			$codes[] = strtoupper( wp_generate_password( 10, false, false ) );
-		}
+		global $wpdb;
 		
-		// Add codes to batch
-		$inserted = \uncanny_learndash_codes\Database::add_codes_to_batch( 
-			$vendor_batch_id, 
-			$codes, 
-			array( 'generation_type' => 'manual', 'coupon_amount' => $code_count ) 
-		);
+		// Start transaction for atomic code generation
+		$wpdb->query( 'START TRANSACTION' );
 		
-		if ( $inserted ) {
+		try {
+			// Generate codes
+			$codes = array();
+			for ( $i = 0; $i < $code_count; $i++ ) {
+				$codes[] = strtoupper( wp_generate_password( 10, false, false ) );
+			}
+			
+			// Add codes to batch
+			$inserted = \uncanny_learndash_codes\Database::add_codes_to_batch( 
+				$vendor_batch_id, 
+				$codes, 
+				array( 'generation_type' => 'manual', 'coupon_amount' => $code_count ) 
+			);
+			
+			if ( ! $inserted ) {
+				throw new Exception( 'Failed to insert codes into batch' );
+			}
+			
 			// Assign vendor meta to each code
 			$new_codes = \uncanny_learndash_codes\Database::get_coupons( $vendor_batch_id );
+			if ( empty( $new_codes ) ) {
+				throw new Exception( 'No codes found after insertion' );
+			}
+			
 			foreach ( $new_codes as $code_obj ) {
-				self::add_code_meta( $code_obj->ID, '_dokan_vendor_id', $vendor_id );
-				self::add_code_meta( $code_obj->ID, '_vendor_batch_id', $vendor_batch_id );
+				if ( ! self::add_code_meta( $code_obj->ID, '_dokan_vendor_id', $vendor_id ) ) {
+					throw new Exception( 'Failed to set vendor meta' );
+				}
+				if ( ! self::add_code_meta( $code_obj->ID, '_vendor_batch_id', $vendor_batch_id ) ) {
+					throw new Exception( 'Failed to set batch meta' );
+				}
 				
 				// Set expiry date on individual code if provided
 				if ( $expiry_date ) {
-					global $wpdb;
-					$wpdb->update(
-						\uncanny_learndash_codes\Config::$tbl_codes,
+					$result = $wpdb->update(
+						$wpdb->prefix . \uncanny_learndash_codes\Config::$tbl_codes,
 						array( 'expire_date' => $expiry_date ),
 						array( 'ID' => $code_obj->ID ),
 						array( '%s' ),
 						array( '%d' )
 					);
+					if ( false === $result ) {
+						throw new Exception( 'Failed to set expiry date' );
+					}
 				}
 			}
 			
-			error_log( 'Generated ' . $code_count . ' codes for vendor batch ' . $vendor_batch_id . ' with expiry: ' . $expiry_date );
+			// Commit transaction
+			$wpdb->query( 'COMMIT' );
+			
+			// Log success without exposing sensitive data
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'Online Texas Core: Successfully generated codes for vendor batch' );
+			}
 			return true;
+			
+		} catch ( Exception $e ) {
+			// Rollback transaction on error
+			$wpdb->query( 'ROLLBACK' );
+			
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'Online Texas Core: Code generation failed - ' . $e->getMessage() );
+			}
+			return false;
 		}
-		
-		return false;
 	}
 
 	/**
@@ -1089,26 +1202,55 @@ class Online_Texas_Vendor_Codes {
 			return false;
 		}
 		
-		// Generate codes
-		$result = self::generate_codes_for_vendor_batch( $vendor_batch_id, $codes_to_generate, $vendor_id, $expiry_date );
+		// Use WordPress transient API for atomic operations to prevent race conditions
+		$lock_key = 'otc_code_gen_lock_' . $vendor_product_id;
+		$lock_timeout = 30; // 30 seconds timeout
 		
-		if ( $result ) {
-			// Update vendor's code count
-			$current_count = get_post_meta( $vendor_product_id, '_vendor_codes_generated', true ) ?: 0;
-			$new_count = $current_count + $codes_to_generate;
-			update_post_meta( $vendor_product_id, '_vendor_codes_generated', $new_count );
-			
-			// Set expiry date if provided
-			if ( $expiry_date ) {
-				update_post_meta( $vendor_batch_id, '_vendor_batch_expiry', $expiry_date );
-			}
-			
-			// Set code type (always registration)
-			update_post_meta( $vendor_batch_id, '_vendor_code_type', 'registration' );
-			
-			return true;
+		// Try to acquire lock
+		if ( get_transient( $lock_key ) ) {
+			// Another process is generating codes
+			return false;
 		}
 		
-		return false;
+		// Set lock
+		set_transient( $lock_key, true, $lock_timeout );
+		
+		try {
+			// Re-check the count after acquiring lock to prevent race conditions
+			$current_count = get_post_meta( $vendor_product_id, '_vendor_codes_generated', true ) ?: 0;
+			$max_codes = get_post_meta( $vendor_product_id, '_vendor_max_codes_per_product', true ) ?: 50;
+			
+			if ( $current_count + $codes_to_generate > $max_codes ) {
+				delete_transient( $lock_key );
+				return false;
+			}
+			
+			// Generate codes
+			$result = self::generate_codes_for_vendor_batch( $vendor_batch_id, $codes_to_generate, $vendor_id, $expiry_date );
+			
+				// Set expiry date if provided
+				if ( $expiry_date ) {
+					update_post_meta( $vendor_batch_id, '_vendor_batch_expiry', $expiry_date );
+				}
+				
+				// Set code type (always registration)
+				update_post_meta( $vendor_batch_id, '_vendor_code_type', 'registration' );
+				
+				// Release lock
+				delete_transient( $lock_key );
+				return true;
+			} else {
+				// Release lock on failure
+				delete_transient( $lock_key );
+				return false;
+			}
+		} catch ( Exception $e ) {
+			// Always release lock in case of exception
+			delete_transient( $lock_key );
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'Online Texas Core: Code generation error - ' . $e->getMessage() );
+			}
+			return false;
+		}
 	}
 }

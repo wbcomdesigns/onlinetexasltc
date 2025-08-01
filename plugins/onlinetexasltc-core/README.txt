@@ -5,11 +5,11 @@ Tags: woocommerce, dokan, learndash, vendor, products, courses, integration
 Requires at least: 5.0
 Tested up to: 6.3
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
-Automatically creates vendor products and LearnDash groups when admin creates products with course links. Seamlessly integrates WooCommerce, Dokan and LearnDash.
+Automatically creates vendor products and LearnDash groups when admin creates products with course links. Seamlessly integrates WooCommerce, Dokan, LearnDash, and Uncanny LearnDash Codes for comprehensive vendor code management.
 
 == Description ==
 
@@ -32,6 +32,17 @@ Online Texas Core is a powerful integration plugin that bridges WooCommerce, Dok
 * **Debug Logging**: Comprehensive logging system for troubleshooting
 * **Production Ready**: Built with security, performance, and scalability in mind
 
+= New in 1.2.0 - Vendor Codes System =
+
+* **Vendor Code Generation**: Vendors can generate registration codes for customers
+* **Admin Permissions System**: Control code generation limits and approval workflows per product
+* **Code Redemption**: Customers can redeem codes via shortcode for automatic course enrollment
+* **Uncanny Integration**: Full integration with Uncanny LearnDash Codes and Automator
+* **Recipe Forwarding**: Vendor codes trigger original admin Automator recipes
+* **Vendor Dashboard**: Dedicated interface for code management in Dokan dashboard
+* **Admin Oversight**: Comprehensive admin interface for managing vendor code requests
+* **WooCommerce HPOS**: Declared compatibility with High-Performance Order Storage
+
 = How It Works =
 
 1. **Admin Creates Product**: Admin creates a WooCommerce product and links it to LearnDash courses or groups
@@ -47,6 +58,8 @@ Online Texas Core is a powerful integration plugin that bridges WooCommerce, Dok
 * WooCommerce 5.0 or higher
 * Dokan 3.0 or higher
 * LearnDash 3.0 or higher
+* Uncanny LearnDash Codes (for vendor codes functionality)
+* Uncanny Automator (for recipe integration)
 
 = Pro Features =
 
@@ -89,6 +102,14 @@ New vendors automatically get products created for all existing admin products w
 
 Yes, you can disable automatic creation in Settings > Texas Core. You can then use the manual sync tools when needed.
 
+= How do vendor codes work? =
+
+Vendors can generate registration codes for their customers. When customers redeem these codes using the [vendor_code_redeem] shortcode, they are automatically enrolled in the associated courses through the admin's Automator recipes.
+
+= Can I limit how many codes vendors can generate? =
+
+Yes, admins can set per-product limits on code generation and optionally require approval for code generation requests through the Vendor Code Generation Permissions meta box on each product.
+
 = What happens to LearnDash groups when vendor products are created? =
 
 Each vendor product gets its own LearnDash group that's linked to the same courses as the original admin product. The vendor is automatically set as the group leader.
@@ -111,6 +132,27 @@ Enable debug mode in Settings > Texas Core to see detailed logs. Check the main 
 
 == Changelog ==
 
+= 1.2.0 =
+* Added: Vendor Codes System with Uncanny LearnDash Codes integration
+* Added: Admin permissions system for controlling vendor code generation
+* Added: Code redemption shortcode [vendor_code_redeem]
+* Added: Recipe forwarding from vendor codes to admin Automator recipes
+* Added: Admin approval workflow for code generation requests
+* Added: Per-product code generation limits
+* Added: Vendor statistics tracking
+* Added: WooCommerce HPOS compatibility declaration
+* Security: Fixed SQL injection vulnerabilities in vendor codes system
+* Security: Fixed XSS vulnerabilities with proper output escaping
+* Security: Implemented proper nonce verification for AJAX operations
+* Security: Added comprehensive input validation and sanitization
+* Security: Fixed race conditions with atomic operations and database locks
+* Security: Implemented database transactions for data integrity
+* Improved: Performance optimization for code generation
+* Improved: Error handling throughout the plugin
+* Improved: Debug logging (now production-safe)
+* Fixed: Memory usage in pagination queries
+* Fixed: Session management with WooCommerce
+
 = 1.1.0 =
 * Added comprehensive vendor lifecycle management
 * Improved synchronization logic for published vs draft products
@@ -129,8 +171,11 @@ Enable debug mode in Settings > Texas Core to see detailed logs. Check the main 
 
 == Upgrade Notice ==
 
+= 1.2.0 =
+Security update with new Vendor Codes System. Fixes SQL injection and XSS vulnerabilities. Adds code generation, admin permissions, and Uncanny integration. Backup recommended before upgrading.
+
 = 1.1.0 =
-This update includes significant improvements to performance, security, and functionality. Backup your site before upgrading. New features include enhanced sync logic, better debugging tools, and improved admin interface.
+Major update with vendor synchronization, improved performance, and enhanced admin dashboard. Backup recommended before upgrading.
 
 = 1.0.0 =
 Initial release of the plugin.

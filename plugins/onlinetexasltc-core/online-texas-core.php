@@ -14,7 +14,7 @@
  * Plugin Name: Online Texas Core
  * Plugin URI: https://wbcomdesigns.com/
  * Description: Creates vendor products and LearnDash groups automatically when admin creates products with course links. Integrates WooCommerce, Dokan and LearnDash.
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: Wbcom Designs
  * Author URI: https://wbcomdesigns.com/
  * Text Domain: online-texas-core
@@ -38,7 +38,7 @@ if ( ! defined( 'WPINC' ) ) {
  * Currently plugin version.
  * Start at version 1.0.0 and use SemVer - https://semver.org
  */
-define( 'ONLINE_TEXAS_CORE_VERSION', '1.1.0' );
+define( 'ONLINE_TEXAS_CORE_VERSION', '1.2.0' );
 define( 'ONLINE_TEXAS_CORE_PATH', plugin_dir_path( __FILE__ ) );
 define( 'ONLINE_TEXAS_CORE_URL', plugin_dir_url( __FILE__ ) );
 
