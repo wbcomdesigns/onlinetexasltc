@@ -1000,22 +1000,21 @@ class Online_Texas_Vendor_Codes {
 				if ( ! self::add_code_meta( $code_obj->ID, '_vendor_batch_id', $vendor_batch_id ) ) {
 					throw new Exception( 'Failed to set batch meta' );
 				}
-				
-				// Set expiry date on individual code if provided
-				if ( $expiry_date ) {
-					$result = $wpdb->update(
-						$wpdb->prefix . \uncanny_learndash_codes\Config::$tbl_codes,
-						array( 'expire_date' => $expiry_date ),
-						array( 'ID' => $code_obj->ID ),
-						array( '%s' ),
-						array( '%d' )
-					);
-					if ( false === $result ) {
-						throw new Exception( 'Failed to set expiry date' );
-					}
+			}
+			// Set expiry date on individual code if provided
+			if ($expiry_date) {
+				$result = $wpdb->update( 
+					$wpdb->prefix . 'uncanny_codes_groups', 
+					array('expire_date' => $expiry_date), 
+					array('ID' => $vendor_batch_id), 
+					array('%s'), 
+					array('%d') 
+				);
+				if (false === $result) {
+					throw new Exception('Failed to set expiry date');
 				}
 			}
-			
+
 			// Commit transaction
 			$wpdb->query( 'COMMIT' );
 			
@@ -1227,7 +1226,7 @@ class Online_Texas_Vendor_Codes {
 			
 			// Generate codes
 			$result = self::generate_codes_for_vendor_batch( $vendor_batch_id, $codes_to_generate, $vendor_id, $expiry_date );
-			
+			if( !empty( $result ) ){
 				// Set expiry date if provided
 				if ( $expiry_date ) {
 					update_post_meta( $vendor_batch_id, '_vendor_batch_expiry', $expiry_date );
